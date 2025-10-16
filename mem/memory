@@ -1,0 +1,8 @@
+﻿package mem
+
+func GetMemoryUsage() {
+
+}
+func GetAllMemory() {
+
+}

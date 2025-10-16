@@ -1,0 +1,270 @@
+﻿//go:build windows
+// +build windows
+
+package net
+
+import (
+	"syscall"
+	"unsafe"
+
+	"github.com/kitsch-9527/wcorefx/comm"
+	win "golang.org/x/sys/windows"
+)
+
+type ImageBase uintptr
+
+var (
+	modiphlpapi = win.NewLazySystemDLL("iphlpapi.dll")
+	modfwpmu    = win.NewLazySystemDLL("fwpuclnt.dll")
+)
+
+var (
+	getExtendedTcpTable              = modiphlpapi.NewProc("GetExtendedTcpTable")
+	getExtendedUdpTable              = modiphlpapi.NewProc("GetExtendedUdpTable")
+	procFwpmEngineOpen               = modfwpmu.NewProc("FwpmEngineOpen0")
+	procFwpmCalloutCreateEnumHandle  = modfwpmu.NewProc("FwpmCalloutCreateEnumHandle0")
+	procFwpmCalloutEnum              = modfwpmu.NewProc("FwpmCalloutEnum0")
+	procFwpmCalloutDestroyEnumHandle = modfwpmu.NewProc("FwpmCalloutDestroyEnumHandle0")
+	procFwpmEngineClose              = modfwpmu.NewProc("FwpmEngineClose0")
+	procFwpmFreeMemory               = modfwpmu.NewProc("FwpmFreeMemory0")
+
+	procFwpmFilterEnum              = modfwpmu.NewProc("FwpmFilterEnum0")
+	procFwpmFilterCreateEnumHandle  = modfwpmu.NewProc("FwpmFilterCreateEnumHandle0")
+	procFwpmFilterGetByKey          = modfwpmu.NewProc("FwpmFilterGetByKey0")
+	procFwpmFilterDestroyEnumHandle = modfwpmu.NewProc("FwpmFilterDestroyEnumHandle0")
+	procFwpmCalloutGetByKey         = modfwpmu.NewProc("FwpmCalloutGetByKey0")
+
+	procFwpmFilterGetById  = modfwpmu.NewProc("FwpmFilterGetById0")
+	procFwpmCalloutGetById = modfwpmu.NewProc("FwpmCalloutGetById0")
+)
+
+// GetExtendedTcpTable 封装Windows API调用
+func GetExtendedTcpTable(table *byte, size *uint32, sort bool, af uint32, tableClass uint32, reserved uint32) (ret error) {
+	r0, _, _ := syscall.Syscall6(
+		getExtendedTcpTable.Addr(),
+		6,
+		uintptr(unsafe.Pointer(table)),
+		uintptr(unsafe.Pointer(size)),
+		comm.Boo2Ptr(sort),
+		uintptr(af),
+		uintptr(tableClass),
+		uintptr(reserved),
+	)
+	if r0 != 0 {
+		ret = syscall.Errno(r0)
+	}
+	return
+}
+
+// GetExtendedUdpTable 封装Windows API调用
+func GetExtendedUdpTable(table *byte, size *uint32, sort bool, af uint32, tableClass uint32, reserved uint32) (ret error) {
+	r0, _, _ := syscall.Syscall6(
+		getExtendedUdpTable.Addr(),
+		6,
+		uintptr(unsafe.Pointer(table)),
+		uintptr(unsafe.Pointer(size)),
+		comm.Boo2Ptr(sort),
+		uintptr(af),
+		uintptr(tableClass),
+		uintptr(reserved),
+	)
+	if r0 != 0 {
+		ret = syscall.Errno(r0)
+	}
+	return
+}
+
+// FwpmEngineOpen 打开Windows防火墙策略引擎并返回句柄
+// serverName: 远程服务器名称，本地使用nil
+// authnService: 认证服务类型，如RPC_C_AUTHN_WINNT
+// authIdentity: 认证身份信息，不需要时使用nil
+// session: 会话参数，使用默认会话时为nil
+// 返回值: 引擎句柄和可能的错误
+func FwpmEngineOpen(
+	serverName *uint16,
+	authnService uint32,
+	authIdentity *secWinntAuthIdentity,
+	session *fwpmSession0,
+) (win.Handle, error) {
+	var engineHandle win.Handle
+	r0, _, _ := syscall.Syscall6(
+		procFwpmEngineOpen.Addr(),
+		5,
+		uintptr(unsafe.Pointer(serverName)),
+		uintptr(authnService),
+		uintptr(unsafe.Pointer(authIdentity)),
+		uintptr(unsafe.Pointer(session)),
+		uintptr(unsafe.Pointer(&engineHandle)),
+		0, // 保留参数
+	)
+
+	if r0 != 0 {
+		return engineHandle, syscall.Errno(r0)
+	}
+
+	return engineHandle, nil
+}
+
+func FwpmCalloutCreateEnumHandle(
+	engineHandle win.Handle,
+	enumTemplate *fwpmCalloutEnumTemplate0,
+) (win.Handle, error) {
+	var enumHandle win.Handle
+	r0, _, _ := syscall.Syscall(
+		procFwpmCalloutCreateEnumHandle.Addr(),
+		3,
+		uintptr(engineHandle),
+		uintptr(unsafe.Pointer(enumTemplate)),
+		uintptr(unsafe.Pointer(&enumHandle)),
+	)
+	if r0 != 0 {
+		return enumHandle, syscall.Errno(r0)
+	}
+
+	return enumHandle, nil
+}
+
+// FwpmCalloutEnum 枚举 WFP 标注
+func FwpmCalloutEnum(
+	engineHandle win.Handle,
+	enumHandle win.Handle,
+	numEntries uint32,
+	entries ***fwpmCallout0,
+	numEntriesReturned *uint32,
+) (err error) {
+	r0, _, _ := syscall.Syscall6(
+		procFwpmCalloutEnum.Addr(),
+		5,
+		uintptr(engineHandle),
+		uintptr(enumHandle),
+		uintptr(numEntries),
+		uintptr(unsafe.Pointer(entries)),
+		uintptr(unsafe.Pointer(numEntriesReturned)),
+		0, // 保留参数
+	)
+	if r0 != 0 {
+		err = syscall.Errno(r0)
+	}
+	return
+}
+
+func FwpmFilterEnum(
+	engineHandle win.Handle,
+	enumHandle win.Handle,
+	numEntries uint32,
+	entries ***fwpmFilter0,
+	numEntriesReturned *uint32,
+) (err error) {
+	r0, _, _ := syscall.Syscall6(
+		procFwpmFilterEnum.Addr(),
+		5,
+		uintptr(engineHandle),
+		uintptr(enumHandle),
+		uintptr(numEntries),
+		uintptr(unsafe.Pointer(entries)),
+		uintptr(unsafe.Pointer(numEntriesReturned)),
+		0, // 保留参数
+	)
+	if r0 != 0 {
+		err = syscall.Errno(r0)
+	}
+	return
+}
+
+func FwpmFilterCreateEnumHandle(
+	engineHandle win.Handle,
+	enumTemplate *fwpmFilterEnumTemplate0,
+) (win.Handle, error) {
+	var enumHandle win.Handle
+	r0, _, _ := syscall.Syscall(
+		procFwpmFilterCreateEnumHandle.Addr(),
+		3,
+		uintptr(engineHandle),
+		uintptr(unsafe.Pointer(enumTemplate)),
+		uintptr(unsafe.Pointer(&enumHandle)),
+	)
+	if r0 != 0 {
+		return enumHandle, syscall.Errno(r0)
+	}
+
+	return enumHandle, nil
+}
+func FwpmFilterGetByKey(engineHandle win.Handle,
+	key *win.GUID,
+	filter **fwpmFilter0) error {
+
+	r0, _, _ := syscall.Syscall(
+		procFwpmFilterGetByKey.Addr(),
+		3,
+		uintptr(engineHandle),
+		uintptr(unsafe.Pointer(key)),
+		uintptr(unsafe.Pointer(filter)),
+	)
+	if r0 != 0 {
+		return syscall.Errno(r0)
+	}
+	return nil
+}
+func FwpmCalloutGetByKey(engineHandle win.Handle,
+	key *win.GUID,
+	filter **fwpmCallout0) error {
+
+	r0, _, _ := syscall.Syscall(
+		procFwpmCalloutGetByKey.Addr(),
+		3,
+		uintptr(engineHandle),
+		uintptr(unsafe.Pointer(key)),
+		uintptr(unsafe.Pointer(filter)),
+	)
+	if r0 != 0 {
+		return syscall.Errno(r0)
+	}
+	return nil
+}
+
+func FwpmCalloutDestroyEnumHandle(engineHandle, enumHandle win.Handle) error {
+	r0, _, _ := syscall.Syscall(
+		procFwpmCalloutDestroyEnumHandle.Addr(),
+		2,
+		uintptr(engineHandle),
+		uintptr(enumHandle),
+		0, // 保留参数
+	)
+	if r0 != 0 {
+		return syscall.Errno(r0)
+	}
+	return nil
+}
+
+func FwpmFilterDestroyEnumHandle(engineHandle, enumHandle win.Handle) error {
+	r0, _, _ := syscall.Syscall(
+		procFwpmFilterDestroyEnumHandle.Addr(),
+		2,
+		uintptr(engineHandle),
+		uintptr(enumHandle),
+		0, // 保留参数
+	)
+	if r0 != 0 {
+		return syscall.Errno(r0)
+	}
+	return nil
+}
+
+func FwpmEngineClose(engineHandle win.Handle) error {
+	r0, _, _ := syscall.Syscall(
+		procFwpmEngineClose.Addr(),
+		1,
+		uintptr(engineHandle),
+		0, // 保留参数
+		0, // 保留参数
+	)
+	if r0 != 0 {
+		return syscall.Errno(r0)
+	}
+	return nil
+}
+
+func FwpmFreeMemory(p *struct{}) {
+	syscall.Syscall(procFwpmFreeMemory.Addr(), 1, uintptr(unsafe.Pointer(p)), 0, 0)
+	return
+}
