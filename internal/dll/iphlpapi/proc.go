@@ -1,8 +1,10 @@
-package psapi
+package iphlpapi
 
-var modpsapi = windows.NewLazySystemDLL("psapi.dll")
+import "golang.org/x/sys/windows"
+
+var modiphlpapi = windows.NewLazySystemDLL("iphlpapi.dll")
 
 var (
-	QueryWorkingSet      = modpsapi.NewProc("QueryWorkingSet")
-	GetProcessMemoryInfo = modpsapi.NewProc("GetProcessMemoryInfo")
+	procGetExtendedTcpTable = modiphlpapi.NewProc("GetExtendedTcpTable")
+	procGetExtendedUdpTable = modiphlpapi.NewProc("GetExtendedUdpTable")
 )

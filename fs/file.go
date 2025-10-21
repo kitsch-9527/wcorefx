@@ -7,8 +7,8 @@ import (
 	"fmt"
 	"unsafe"
 
-	"github.com/kitsch-9527/wcorefx/comm"
-	win "golang.org/x/sys/windows"
+	comm "github.com/kitsch-9527/wcorefx/common"
+	"golang.org/x/sys/windows"
 )
 
 // InfoType 表示文件资源信息的类型
@@ -27,7 +27,7 @@ const (
 
 // GetFileCreateTime 文件创建时间 返回时间戳
 func GetFileCreateTime(path string) (int64, error) {
-	var creationTime win.Filetime
+	var creationTime windows.Filetime
 	err := GetFileTime(path, &creationTime, nil, nil)
 	if err != nil {
 		return 0, fmt.Errorf("GetFileTime failed: %w", err)
@@ -37,7 +37,7 @@ func GetFileCreateTime(path string) (int64, error) {
 
 // GetFileAccessTime 文件访问时间
 func GetFileAccessTime(path string) (int64, error) {
-	var lastAccessTime win.Filetime
+	var lastAccessTime windows.Filetime
 	err := GetFileTime(path, nil, &lastAccessTime, nil)
 	if err != nil {
 		return 0, fmt.Errorf("GetFileTime failed: %w", err)
@@ -47,7 +47,7 @@ func GetFileAccessTime(path string) (int64, error) {
 
 // GetFileModifyTime 文件修改时间
 func GetFileModifyTime(path string) (int64, error) {
-	var lastWriteTime win.Filetime
+	var lastWriteTime windows.Filetime
 	err := GetFileTime(path, nil, nil, &lastWriteTime)
 	if err != nil {
 		fmt.Errorf("GetFileTime failed: %w", err)
@@ -57,21 +57,21 @@ func GetFileModifyTime(path string) (int64, error) {
 }
 
 // GetFileTime 获取文件的创建、访问、修改时间
-func GetFileTime(path string, creationTime, lastAccessTime, lastWriteTime *win.Filetime) error {
-	handle, err := win.CreateFile(
-		win.StringToUTF16Ptr(path),
-		win.GENERIC_READ,
-		win.FILE_SHARE_READ,
+func GetFileTime(path string, creationTime, lastAccessTime, lastWriteTime *windows.Filetime) error {
+	handle, err := windows.CreateFile(
+		windows.StringToUTF16Ptr(path),
+		windows.GENERIC_READ,
+		windows.FILE_SHARE_READ,
 		nil,
-		win.OPEN_EXISTING,
-		win.FILE_ATTRIBUTE_NORMAL,
+		windows.OPEN_EXISTING,
+		windows.FILE_ATTRIBUTE_NORMAL,
 		0,
 	)
 	if err != nil {
 		return fmt.Errorf("CreateFile failed: %w", err)
 	}
-	defer win.CloseHandle(handle)
-	err = win.GetFileTime(
+	defer windows.CloseHandle(handle)
+	err = windows.GetFileTime(
 		handle,
 		creationTime,
 		lastAccessTime,
@@ -113,7 +113,7 @@ func getFileInfoByBlock(versionInfo []byte, infoType InfoType, subTranslation *s
 	// 当未指定子翻译时，自动获取系统默认的语言和代码页
 	if subTranslation == nil {
 		// 查询语言和代码页信息（对应Windows的Translation资源）
-		err := win.VerQueryValue(
+		err := windows.VerQueryValue(
 			unsafe.Pointer(&versionInfo[0]),
 			"\\VarFileInfo\\Translation",
 			unsafe.Pointer(&translation),
@@ -142,7 +142,7 @@ func getFileInfoByBlock(versionInfo []byte, infoType InfoType, subTranslation *s
 
 	// 提取指定类型的具体信息
 	var infoBuf unsafe.Pointer
-	err := win.VerQueryValue(
+	err := windows.VerQueryValue(
 		unsafe.Pointer(&versionInfo[0]),
 		subBlock,
 		unsafe.Pointer(&infoBuf),
@@ -153,17 +153,17 @@ func getFileInfoByBlock(versionInfo []byte, infoType InfoType, subTranslation *s
 	}
 
 	// 将UTF-16编码的结果转换为Go字符串
-	return win.UTF16PtrToString((*uint16)(infoBuf)), nil
+	return windows.UTF16PtrToString((*uint16)(infoBuf)), nil
 }
 
 // getResourceVersionInfo 获取文件的完整版本资源信息
 // path: 文件路径
 // 返回值: 版本信息字节数组和可能的错误
 func getResourceVersionInfo(path string) ([]byte, error) {
-	var zeroHandle = win.Handle(0)
+	var zeroHandle = windows.Handle(0)
 
 	// 获取版本信息缓冲区大小
-	bufferSize, err := win.GetFileVersionInfoSize(path, &zeroHandle)
+	bufferSize, err := windows.GetFileVersionInfoSize(path, &zeroHandle)
 	if err != nil {
 		return nil, fmt.Errorf("GetFileVersionInfoSize failed: %w", err)
 	}
@@ -173,7 +173,7 @@ func getResourceVersionInfo(path string) ([]byte, error) {
 
 	// 申请缓冲区并读取版本信息
 	buffer := make([]byte, bufferSize)
-	err = win.GetFileVersionInfo(
+	err = windows.GetFileVersionInfo(
 		path,
 		0,
 		bufferSize,
@@ -196,9 +196,9 @@ func GetFileVersionInfo(path string) (string, error) {
 	}
 
 	// 解析固定版本信息结构
-	var fixedInfo *win.VS_FIXEDFILEINFO
+	var fixedInfo *windows.VS_FIXEDFILEINFO
 	bufferSize := uint32(unsafe.Sizeof(*fixedInfo))
-	err = win.VerQueryValue(
+	err = windows.VerQueryValue(
 		unsafe.Pointer(&versionInfo[0]),
 		"\\",
 		unsafe.Pointer(&fixedInfo),

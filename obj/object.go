@@ -8,16 +8,19 @@ import (
 	"strings"
 	"syscall"
 
-	"github.com/kitsch-9527/wcorefx/comm"
+	comm "github.com/kitsch-9527/wcorefx/common"
+	"github.com/kitsch-9527/wcorefx/internal/dll/psapi"
 	"github.com/kitsch-9527/wcorefx/os"
-	win "golang.org/x/sys/windows"
+	"golang.org/x/sys/windows"
 )
+
+type ImageBase = uintptr
 
 // GetDriverList 获得系统中所有驱动程序
 func GetDriverList() ([]ImageBase, error) {
 	var lpcNeeded uint32
 	// 第一次调用获取所需缓冲区大小
-	err := EnumDeviceDrivers(nil, 0, &lpcNeeded)
+	err := psapi.EnumDeviceDrivers(nil, 0, &lpcNeeded)
 	if err != nil && err != syscall.ERROR_INSUFFICIENT_BUFFER {
 		return nil, fmt.Errorf("EnumDeviceDrivers first call failed: %w", err)
 	}
@@ -35,7 +38,7 @@ func GetDriverList() ([]ImageBase, error) {
 
 	// 第二次调用获取实际的驱动程序列表
 	bufferSize := uint32(len(drivers)) * uint32(comm.PtrSize)
-	err = EnumDeviceDrivers(&drivers[0], bufferSize, &lpcNeeded)
+	err = psapi.EnumDeviceDrivers(&drivers[0], bufferSize, &lpcNeeded)
 	if err != nil {
 		return nil, fmt.Errorf("EnumDeviceDrivers second call failed: %w", err)
 	}
@@ -51,11 +54,11 @@ func GetDriverList() ([]ImageBase, error) {
 // GetDriverPath 获得指定驱动程序的路径
 func GetDriverPath(driver ImageBase) (string, error) {
 	var lpFilename [comm.MAXPATH + 1]uint16
-	err := GetDeviceDriverFileName(driver, &lpFilename[0], uint32(len(lpFilename)))
+	err := psapi.GetDeviceDriverFileName(driver, &lpFilename[0], uint32(len(lpFilename)))
 	if err != nil {
 		return "", fmt.Errorf("GetDeviceDriverFileName failed: %w", err)
 	}
-	path := win.UTF16ToString(lpFilename[:])
+	path := windows.UTF16ToString(lpFilename[:])
 	// 替换系统根目录
 	sysroot := `\SystemRoot`
 	if strings.HasPrefix(path, sysroot) {
@@ -72,9 +75,9 @@ func GetDriverPath(driver ImageBase) (string, error) {
 
 func GetDriverName(driver ImageBase) (string, error) {
 	var lpName [comm.MAXPATH + 1]uint16
-	err := GetDeviceDriverBaseName(driver, &lpName[0], uint32(len(lpName)))
+	err := psapi.GetDeviceDriverBaseName(driver, &lpName[0], uint32(len(lpName)))
 	if err != nil {
 		return "", fmt.Errorf("GetDeviceDriverBaseName failed: %w", err)
 	}
-	return win.UTF16ToString(lpName[:]), nil
+	return windows.UTF16ToString(lpName[:]), nil
 }

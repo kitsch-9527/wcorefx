@@ -1,9 +1,10 @@
+//go:build windows
+// +build windows
+
 // Copyright (c) 2021 The Inet.Af AUTHORS. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
-//go:build windows
-// +build windows
-package net
+package fwpuclnt
 
 import (
 	"fmt"
@@ -12,20 +13,20 @@ import (
 )
 
 //go:notinheap
-type fwpmDisplayData0 struct {
+type FwpmDisplayData0 struct {
 	Name        *uint16
 	Description *uint16
 }
 
-type fwpmSession0Flags uint32
+type FwpmSession0Flags uint32
 
-const fwpmSession0FlagDynamic = 1
+const FwpmSession0FlagDynamic = 1
 
 //go:notinheap
-type fwpmSession0 struct {
+type FwpmSession0 struct {
 	SessionKey           windows.GUID
-	DisplayData          fwpmDisplayData0
-	Flags                fwpmSession0Flags
+	DisplayData          FwpmDisplayData0
+	Flags                FwpmSession0Flags
 	TxnWaitTimeoutMillis uint32
 	ProcessID            uint32
 	SID                  *windows.SID
@@ -48,7 +49,7 @@ type fwpmLayerEnumTemplate0 struct {
 //go:notinheap
 type fwpmLayer0 struct {
 	LayerKey           LayerID
-	DisplayData        fwpmDisplayData0
+	DisplayData        FwpmDisplayData0
 	Flags              uint32
 	NumFields          uint32
 	Fields             *fwpmField0
@@ -108,7 +109,7 @@ type fwpmSublayerEnumTemplate0 struct {
 }
 
 //go:notinheap
-type fwpByteBlob struct {
+type FwpByteBlob struct {
 	Size uint32
 	Data *uint8
 }
@@ -120,10 +121,10 @@ const fwpmSublayerFlagsPersistent fwpmSublayerFlags = 1
 //go:notinheap
 type fwpmSublayer0 struct {
 	SublayerKey  SublayerID
-	DisplayData  fwpmDisplayData0
+	DisplayData  FwpmDisplayData0
 	Flags        fwpmSublayerFlags
 	ProviderKey  *windows.GUID
-	ProviderData fwpByteBlob
+	ProviderData FwpByteBlob
 	Weight       uint16
 }
 
@@ -140,28 +141,28 @@ type ProviderID windows.GUID
 //go:notinheap
 type fwpmProvider0 struct {
 	ProviderKey  ProviderID
-	DisplayData  fwpmDisplayData0
+	DisplayData  FwpmDisplayData0
 	Flags        fwpmProviderFlags
-	ProviderData fwpByteBlob
+	ProviderData FwpByteBlob
 	ServiceName  *uint16
 }
 
 //go:notinheap
-type fwpValue0 struct {
+type FwpValue0 struct {
 	Type  dataType
 	Value uintptr // unioned value
 }
 
-type fwpmFilterFlags uint32
+type FwpmFilterFlags uint32
 
 const (
-	fwpmFilterFlagsPersistent fwpmFilterFlags = 1 << iota
-	fwpmFilterFlagsBootTime
-	fwpmFilterFlagsHasProviderContext
-	fwpmFilterFlagsClearActionRight
-	fwpmFilterFlagsPermitIfCalloutUnregistered
-	fwpmFilterFlagsDisabled
-	fwpmFilterFlagsIndexed
+	FwpmFilterFlagsPersistent FwpmFilterFlags = 1 << iota
+	FwpmFilterFlagsBootTime
+	FwpmFilterFlagsHasProviderContext
+	FwpmFilterFlagsClearActionRight
+	FwpmFilterFlagsPermitIfCalloutUnregistered
+	FwpmFilterFlagsDisabled
+	FwpmFilterFlagsIndexed
 )
 
 // SublayerID identifies a WFP sublayer.
@@ -187,29 +188,29 @@ const (
 )
 
 //go:notinheap
-type fwpmAction0 struct {
+type FwpmAction0 struct {
 	Type Action
 	GUID windows.GUID
 }
 type RuleID windows.GUID
 
-// fwpmFilter0 is the Go representation of FWPM_FILTER0,
+// FwpmFilter0 is the Go representation of FWPM_FILTER0,
 // which stores the state associated with a filter.
 // See https://docs.microsoft.com/en-us/windows/win32/api/fwpmtypes/ns-fwpmtypes-fwpm_filter0
 //
 //go:notinheap
-type fwpmFilter0 struct {
+type FwpmFilter0 struct {
 	FilterKey           windows.GUID
-	DisplayData         fwpmDisplayData0
-	Flags               fwpmFilterFlags
+	DisplayData         FwpmDisplayData0
+	Flags               FwpmFilterFlags
 	ProviderKey         *windows.GUID
-	ProviderData        fwpByteBlob
+	ProviderData        FwpByteBlob
 	LayerKey            LayerID
 	SublayerKey         SublayerID
-	Weight              fwpValue0
+	Weight              FwpValue0
 	NumFilterConditions uint32
-	FilterConditions    *fwpmFilterCondition0
-	Action              fwpmAction0
+	FilterConditions    *FwpmFilterCondition0
+	Action              FwpmAction0
 
 	// Only one of RawContext/ProviderContextKey must be set.
 	RawContext         uint64
@@ -217,14 +218,14 @@ type fwpmFilter0 struct {
 
 	Reserved        *windows.GUID
 	FilterID        uint64
-	EffectiveWeight fwpValue0
+	EffectiveWeight FwpValue0
 }
-type fwpmCallout0 struct {
+type FwpmCallout0 struct {
 	CalloutKey   windows.GUID
-	DisplayData  fwpmDisplayData0
-	Flags        fwpmFilterFlags
+	DisplayData  FwpmDisplayData0
+	Flags        FwpmFilterFlags
 	ProviderKey  *windows.GUID
-	ProviderData fwpByteBlob
+	ProviderData FwpByteBlob
 	LayerKey     LayerID
 	CalloutId    uint32
 }
@@ -292,7 +293,7 @@ func (m Match) String() string {
 type FieldID windows.GUID
 
 //go:notinheap
-type fwpmFilterCondition0 struct {
+type FwpmFilterCondition0 struct {
 	FieldKey  FieldID
 	MatchType MatchType
 	Value     fwpConditionValue0
@@ -323,14 +324,14 @@ type fwpmFilterEnumTemplate0 struct {
 	Flags                   filterEnumFlags
 	ProviderContextTemplate *fwpmProviderContextEnumTemplate0 // TODO: wtf?
 	NumConditions           uint32
-	Conditions              *fwpmFilterCondition0
+	Conditions              *FwpmFilterCondition0
 	ActionMask              uint32
 	CalloutKey              *windows.GUID
 }
 
 //go:notinheap
 type fwpRange0 struct {
-	From, To fwpValue0
+	From, To FwpValue0
 }
 
 type filterEnumType uint32
@@ -369,7 +370,7 @@ type fwpmNetEventHeader1 struct {
 	LocalPort  uint16
 	RemotePort uint16
 	ScopeID    uint32
-	AppID      fwpByteBlob
+	AppID      FwpByteBlob
 	UserID     *windows.SID
 
 	// Random reserved fields for an aborted attempt at including
@@ -422,7 +423,7 @@ type secWinntAuthIdentity struct {
 	DomainLength   uint32
 	Password       *uint8
 	PasswordLength uint32
-	Flags          fwpmFilterFlags
+	Flags          FwpmFilterFlags
 }
 
 // FWPM_CALLOUT_ENUM_TEMPLATE0 定义标注枚举模板

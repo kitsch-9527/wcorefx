@@ -1,15 +1,15 @@
-﻿package ps
+package ntdll
 
 import "golang.org/x/sys/windows"
 
-//SYSTEM_HANDLE_INFORMATION
+// SYSTEM_HANDLE_INFORMATION
 type PSystemHandleInformation struct {
 	NumberOfHandles uint32 // 32位偏移0x00，64位偏移0x00
 	//Reserved        uintptr                        // 32位偏移0x04，64位偏移0x08
 	Handles [1]SystemHandleTableEntryInfo // 32位偏移0x08，64位偏移0x10（变长数组，这里以[1]表示）
 }
 
-//SYSTEM_HANDLE_TABLE_ENTRY_INFO
+// SYSTEM_HANDLE_TABLE_ENTRY_INFO
 type SystemHandleTableEntryInfo struct {
 	UniqueProcessId       uint16  // USHORT 对应16位无符号整数（进程ID）
 	CreatorBackTraceIndex uint16  // USHORT 对应16位无符号整数（创建者回溯索引）
@@ -19,18 +19,6 @@ type SystemHandleTableEntryInfo struct {
 	Object                uintptr // PVOID 对应64位指针（对象地址）
 	GrantedAccess         windows.ACCESS_MASK
 }
-
-//SYSTEM_HANDLE_TABLE_ENTRY_INFO_EX
-// type SystemHandleTableEntryInfo struct {
-// 	Object                uintptr             // PVOID 对应Go的uintptr（64位指针）
-// 	UniqueProcessId       uintptr             // HANDLE 对应uintptr（进程ID句柄）
-// 	HandleValue           uintptr             // HANDLE 对应uintptr（句柄值）
-// 	GrantedAccess         windows.ACCESS_MASK // ACCESS_MASK 对应uint32（访问掩码）
-// 	CreatorBackTraceIndex uint16              // USHORT 对应uint16（创建者回溯索引）
-// 	ObjectTypeIndex       uint16              // USHORT 对应uint16（对象类型索引）
-// 	HandleAttributes      uint32              // ULONG 对应uint32（句柄属性）
-// 	Reserved              uint32              // ULONG 对应uint32（保留字段）
-// }
 
 // OBJECT_INFORMATION_CLASS 对应 C 中的 _OBJECT_INFORMATION_CLASS 枚举
 // 用于指定获取或设置对象信息的类型

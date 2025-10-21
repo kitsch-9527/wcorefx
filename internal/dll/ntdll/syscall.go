@@ -1,50 +1,17 @@
-﻿package ps
+﻿package ntdll
 
 import (
 	"syscall"
 	"unsafe"
 
+	"github.com/kitsch-9527/wcorefx/internal/common"
 	"golang.org/x/sys/windows"
 )
 
-var (
-	modpsapi = windows.NewLazySystemDLL("psapi.dll")
-	modntdll = windows.NewLazySystemDLL("ntdll.dll")
-)
-
-var (
-	procQueryWorkingSet      = modpsapi.NewProc("QueryWorkingSet")
-	procGetProcessMemoryInfo = modpsapi.NewProc("GetProcessMemoryInfo")
-	procNtDuplicateObject    = modntdll.NewProc("NtDuplicateObject")
-	procNtQueryObject        = modntdll.NewProc("NtQueryObject")
-)
-
-func QueryWorkingSet(h windows.Handle, pv uintptr, cb uint32) (err error) {
-	r1, _, e1 := syscall.Syscall(procQueryWorkingSet.Addr(), 3, uintptr(h), uintptr(pv), uintptr(cb))
-	if r1 == 0 {
-		err = windows.Errno(e1)
-	}
-	return
-}
-
-func getProcessMemoryInfo(h windows.Handle, mem *PROCESS_MEMORY_COUNTERS) (err error) {
-	r1, _, e1 := syscall.Syscall(procGetProcessMemoryInfo.Addr(), 3, uintptr(h), uintptr(unsafe.Pointer(mem)), uintptr(unsafe.Sizeof(*mem)))
-	if r1 == 0 {
-		if e1 != 0 {
-			err = error(e1)
-		} else {
-			err = syscall.EINVAL
-		}
-	}
-	return
-}
-
-// NtDuplicateObject
 func NtDuplicateObject(
 	sourceProcessHandle windows.Handle,
 	sourceHandle windows.Handle,
 	targetProcessHandle windows.Handle,
-	// targetHandle *windows.Handle,
 	desiredAccess windows.ACCESS_MASK,
 	handleAttributes uint32,
 	options uint32,
@@ -80,4 +47,13 @@ func NtQueryObject(
 		return syscall.Errno(r0)
 	}
 	return nil
+}
+
+// RtlAdjustPrivilege
+func RtlAdjustPrivilege(priv uint32, enable bool, current bool, enabled *bool) (err error) {
+	r1, _, e1 := syscall.SyscallN(procRtlAdjustPrivilege.Addr(), uintptr(priv), common.Boo2Ptr(enable), common.Boo2Ptr(current), uintptr(unsafe.Pointer(enabled)))
+	if r1 == 0 {
+		err = common.ErrnoErr(e1)
+	}
+	return
 }

@@ -10,8 +10,10 @@ import (
 
 	"github.com/emirpasic/gods/maps/treemap"
 	"github.com/emirpasic/gods/utils"
-	"github.com/kitsch-9527/wcorefx/comm"
-	"github.com/kitsch-9527/wcorefx/se"
+	comm "github.com/kitsch-9527/wcorefx/common"
+	"github.com/kitsch-9527/wcorefx/internal/dll/ntdll"
+	"github.com/kitsch-9527/wcorefx/internal/dll/psapi"
+	se "github.com/kitsch-9527/wcorefx/sec"
 	"golang.org/x/sys/windows"
 )
 
@@ -105,14 +107,14 @@ func SessionIdFromPid(pid uint32) (uint32, error) {
 }
 
 // GetProcMemoryInfo 获取指定进程的内存信息
-func GetProcMemoryInfo(pid uint32) (PROCESS_MEMORY_COUNTERS, error) {
-	var mem PROCESS_MEMORY_COUNTERS
+func GetProcMemoryInfo(pid uint32) (psapi.PROCESS_MEMORY_COUNTERS, error) {
+	var mem psapi.PROCESS_MEMORY_COUNTERS
 	c, err := OpenProcessMinHandle(pid)
 	if err != nil {
 		return mem, err
 	}
 	defer windows.CloseHandle(c)
-	if err := getProcessMemoryInfo(c, &mem); err != nil {
+	if err := psapi.GetProcessMemoryInfo(c, &mem); err != nil {
 		return mem, fmt.Errorf("getProcessMemoryInfo failed: %w", err)
 	}
 
@@ -418,11 +420,11 @@ func GetProcessAllOpenFile(pid uint32) error {
 	if err != nil {
 		return fmt.Errorf("NtQuerySystemInformation failed: %w", err)
 	}
-	handleTable := (*PSystemHandleInformation)(unsafe.Pointer(&buffer[0]))
+	handleTable := (*ntdll.PSystemHandleInformation)(unsafe.Pointer(&buffer[0]))
 	for i := uint32(0); i < handleTable.NumberOfHandles; i++ {
 		// 计算当前句柄条目的地址
-		entryAddr := uintptr(unsafe.Pointer(&handleTable.Handles)) + uintptr(i)*unsafe.Sizeof(SystemHandleTableEntryInfo{})
-		handleInfo := *(*SystemHandleTableEntryInfo)(unsafe.Pointer(entryAddr))
+		entryAddr := uintptr(unsafe.Pointer(&handleTable.Handles)) + uintptr(i)*unsafe.Sizeof(ntdll.SystemHandleTableEntryInfo{})
+		handleInfo := *(*ntdll.SystemHandleTableEntryInfo)(unsafe.Pointer(entryAddr))
 		if handleInfo.UniqueProcessId == uint16(pid) {
 			//fmt.Println(handleInfo)
 			h, err := duplicateAnotherProcessHandle(uint32(handleInfo.UniqueProcessId), windows.Handle(handleInfo.HandleValue))
@@ -463,7 +465,7 @@ func duplicateAnotherProcessHandle(pid uint32, hSource windows.Handle) (windows.
 	if err != nil {
 		return 0, fmt.Errorf("GetCurrentProcess failed: %w", err)
 	}
-	targetHandle, err := NtDuplicateObject(hPreces, hSource, hCurrent, 0, 0, 0)
+	targetHandle, err := ntdll.NtDuplicateObject(hPreces, hSource, hCurrent, 0, 0, 0)
 	if err != nil {
 		return 0, fmt.Errorf("NtDuplicateObject failed: %w", err)
 	}
@@ -475,13 +477,13 @@ func GetHandleType(h windows.Handle) (string, error) {
 	bufferSize := uint32(0x1000)
 	var returnLength uint32
 	objectTypeInfo := make([]byte, bufferSize)
-	err := NtQueryObject(h, ObjectTypeInformation, uintptr(unsafe.Pointer(&objectTypeInfo[0])), bufferSize, &returnLength)
+	err := ntdll.NtQueryObject(h, ntdll.ObjectTypeInformation, uintptr(unsafe.Pointer(&objectTypeInfo[0])), bufferSize, &returnLength)
 	if err != nil {
 		fmt.Println("NtQueryObject failed:", err)
 		return "", err
 	}
 	// 转换缓冲区为PUBLIC_OBJECT_TYPE_INFORMATION结构体
-	objTypeInfo := (*PUBLIC_OBJECT_TYPE_INFORMATION)(unsafe.Pointer(&objectTypeInfo[0]))
+	objTypeInfo := (*ntdll.PUBLIC_OBJECT_TYPE_INFORMATION)(unsafe.Pointer(&objectTypeInfo[0]))
 	return syscall.UTF16ToString(
 		unsafe.Slice(
 			objTypeInfo.TypeName.Buffer,
@@ -495,17 +497,17 @@ func GetHandleName(h windows.Handle) (string, error) {
 	bufferSize := uint32(0x1000)
 	var returnLength uint32
 	objectNameInfo := make([]byte, bufferSize)
-	err := NtQueryObject(h, ObjectNameInformation, uintptr(unsafe.Pointer(&objectNameInfo[0])), bufferSize, &returnLength)
+	err := ntdll.NtQueryObject(h, ntdll.ObjectNameInformation, uintptr(unsafe.Pointer(&objectNameInfo[0])), bufferSize, &returnLength)
 	if err == windows.STATUS_INFO_LENGTH_MISMATCH {
 		return "", fmt.Errorf("NtQueryObject failed: %w", err)
 	}
 	objectNameInfo = make([]byte, returnLength)
-	err = NtQueryObject(h, ObjectNameInformation, uintptr(unsafe.Pointer(&objectNameInfo[0])), bufferSize, &returnLength)
+	err = ntdll.NtQueryObject(h, ntdll.ObjectNameInformation, uintptr(unsafe.Pointer(&objectNameInfo[0])), bufferSize, &returnLength)
 	if err != nil {
 		return "", fmt.Errorf("NtQueryObject failed: %w", err)
 	}
 	// 转换缓冲区为OBJECT_NAME_INFORMATION结构体
-	objNameInfo := (*UNICODE_STRING)(unsafe.Pointer(&objectNameInfo[0]))
+	objNameInfo := (*ntdll.UNICODE_STRING)(unsafe.Pointer(&objectNameInfo[0]))
 	return syscall.UTF16ToString(
 		unsafe.Slice(
 			objNameInfo.Buffer,

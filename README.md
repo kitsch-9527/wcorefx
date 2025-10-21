@@ -97,7 +97,7 @@ func main() {
 ### 安全权限检查
 
 ```go
-import "github.com/kitsch-9527/wcorefx/se"
+import "github.com/kitsch-9527/wcorefx/sec"
 
 // 检查当前用户是否具有管理员权限
 isAdmin, err := se.CheckAdmin()

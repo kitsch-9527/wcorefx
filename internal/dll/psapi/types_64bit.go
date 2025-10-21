@@ -1,7 +1,7 @@
 ﻿// SPDX-License-Identifier: BSD-3-Clause
 //go:build (windows && amd64) || (windows && arm64)
 
-package ps
+package psapi
 
 type PROCESS_MEMORY_COUNTERS struct { //nolint:revive //FIXME
 	CB                         uint32

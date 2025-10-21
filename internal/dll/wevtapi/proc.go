@@ -1,8 +1,9 @@
-package psapi
+package wevtapi
 
-var modpsapi = windows.NewLazySystemDLL("psapi.dll")
+import "golang.org/x/sys/windows"
+
+var modwevtapi = windows.NewLazySystemDLL("wevtapi.dll")
 
 var (
-	QueryWorkingSet      = modpsapi.NewProc("QueryWorkingSet")
-	GetProcessMemoryInfo = modpsapi.NewProc("GetProcessMemoryInfo")
+	procEvtExportLog = modwevtapi.NewProc("EvtExportLog")
 )

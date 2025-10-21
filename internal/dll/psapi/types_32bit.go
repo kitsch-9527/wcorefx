@@ -1,7 +1,7 @@
 ﻿//go:build windows && 386
 // +build windows,386
 
-package ps
+package psapi
 
 type PROCESS_MEMORY_COUNTERS struct { //nolint:revive //FIXME
 	CB                         uint32

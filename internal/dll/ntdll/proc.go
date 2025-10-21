@@ -1,8 +1,11 @@
-package psapi
+package ntdll
 
-var modpsapi = windows.NewLazySystemDLL("psapi.dll")
+import "golang.org/x/sys/windows"
+
+var modntdll = windows.NewLazySystemDLL("ntdll.dll")
 
 var (
-	QueryWorkingSet      = modpsapi.NewProc("QueryWorkingSet")
-	GetProcessMemoryInfo = modpsapi.NewProc("GetProcessMemoryInfo")
+	procNtDuplicateObject  = modntdll.NewProc("NtDuplicateObject")
+	procNtQueryObject      = modntdll.NewProc("NtQueryObject")
+	procRtlAdjustPrivilege = modntdll.NewProc("RtlAdjustPrivilege")
 )

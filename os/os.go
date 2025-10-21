@@ -6,12 +6,13 @@ package os
 import (
 	"fmt"
 
+	"github.com/kitsch-9527/wcorefx/internal/dll/kernel32"
+	"github.com/kitsch-9527/wcorefx/internal/dll/wtsapi32"
 	"golang.org/x/sys/windows"
-	win "golang.org/x/sys/windows"
 )
 
 func WinDir() (string, error) {
-	n, err := win.GetWindowsDirectory()
+	n, err := windows.GetWindowsDirectory()
 	if err != nil {
 		return "", fmt.Errorf("GetWindowsDirectory failed: %w", err)
 	}
@@ -20,7 +21,7 @@ func WinDir() (string, error) {
 
 // 根据会话ID获取用户名
 func SessionUserName(sessionId uint32) (string, error) {
-	name, err := procWTSQuerySessionInformation(WTS_CURRENT_SERVER_HANDLE, sessionId, WTSUSERNAME)
+	name, err := wtsapi32.WTSQuerySessionInformation(wtsapi32.WTS_CURRENT_SERVER_HANDLE, sessionId, wtsapi32.WTSUSERNAME)
 	if err != nil {
 		return "", fmt.Errorf("WTSQuerySessionInformation failed: %w", err)
 	}
@@ -33,6 +34,6 @@ func GetGroupsBySid(sid *windows.SID) {
 
 // GetProcessorNumber 获取CPU数量
 func GetProcessorNumber() uint32 {
-	systemInfo := GetSystemInfo()
+	systemInfo := kernel32.GetSystemInfo()
 	return systemInfo.DwNumberOfProcessors
 }

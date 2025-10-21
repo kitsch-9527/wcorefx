@@ -7,8 +7,9 @@ import (
 	"fmt"
 	"unsafe"
 
+	"github.com/kitsch-9527/wcorefx/internal/dll/advapi32"
+	"github.com/kitsch-9527/wcorefx/internal/dll/ntdll"
 	"golang.org/x/sys/windows"
-	win "golang.org/x/sys/windows"
 )
 
 // Windows特权名称常量
@@ -54,9 +55,29 @@ func VerifyPrivileges(path string) error {
 // 返回值: 操作是否成功
 func SeEnableDebugPrivilege(b bool) bool {
 	if b {
-		return SeEnablePrivilege("", win.SE_GROUP_INTEGRITY)
+		return SeEnablePrivilege("", windows.SE_GROUP_INTEGRITY)
 	} else {
 		return SeEnablePrivilege(debugName, 0)
+	}
+}
+
+// 实现 String() 方法，方便打印枚举值对应的名称（类似 C 枚举的字符串化）
+func NetJoinStatfmt(s advapi32.NETSETUP_JOIN_STATUS) string {
+	switch s {
+	case advapi32.NetSetupUnknownStatus:
+		//return "NetSetupUnknownStatus"
+		return "未知状态"
+	case advapi32.NetSetupUnjoined:
+		//return "NetSetupUnjoined"
+		return "未加入域或工作组"
+	case advapi32.NetSetupWorkgroupName:
+		//return "NetSetupWorkgroupName"
+		return "已加入工作组"
+	case advapi32.NetSetupDomainName:
+		//return "NetSetupDomainName"
+		return "已加入域"
+	default:
+		return fmt.Sprintf("NETSETUP_JOIN_STATUS(%d)", s) // 未知值时返回原始数字
 	}
 }
 
@@ -65,7 +86,7 @@ func SeEnableDebugPrivilege(b bool) bool {
 // 返回值: 操作是否成功
 func SeDisableDebugPrivilege(b bool) bool {
 	if b {
-		return SeDisablePrivilege("", win.SE_GROUP_INTEGRITY)
+		return SeDisablePrivilege("", windows.SE_GROUP_INTEGRITY)
 	} else {
 		return SeDisablePrivilege(debugName, 0)
 	}
@@ -110,15 +131,15 @@ func SeDisablePrivilege(privName string, privNumber int) bool {
 // processPrivilegeByApi 通过API方式处理权限（内部函数）
 func processPrivilegeByApi(privName string, op privilegeOperate) error {
 	//fmt.Println("processPrivilegeByApi:", privName, op)
-	var token win.Token
-	hProcess := win.CurrentProcess()
-	err := win.OpenProcessToken(hProcess, win.TOKEN_ADJUST_PRIVILEGES|win.TOKEN_QUERY, &token)
+	var token windows.Token
+	hProcess := windows.CurrentProcess()
+	err := windows.OpenProcessToken(hProcess, windows.TOKEN_ADJUST_PRIVILEGES|windows.TOKEN_QUERY, &token)
 	if err != nil {
 		return fmt.Errorf("OpenProcessToken failed: %v", err)
 	}
 	defer token.Close()
-	var luid win.LUID
-	err = win.LookupPrivilegeValue(nil, win.StringToUTF16Ptr(privName), &luid)
+	var luid windows.LUID
+	err = windows.LookupPrivilegeValue(nil, windows.StringToUTF16Ptr(privName), &luid)
 	if err != nil {
 		return fmt.Errorf("LookupPrivilegeValue failed: %v", err)
 
@@ -126,20 +147,20 @@ func processPrivilegeByApi(privName string, op privilegeOperate) error {
 	// 设置权限属性
 	attr := uint32(0)
 	if op == privilegeEnable {
-		attr = win.SE_PRIVILEGE_ENABLED
+		attr = windows.SE_PRIVILEGE_ENABLED
 	} else {
-		attr = win.SE_PRIVILEGE_REMOVED
+		attr = windows.SE_PRIVILEGE_REMOVED
 	}
-	tp := win.Tokenprivileges{
+	tp := windows.Tokenprivileges{
 		PrivilegeCount: 1,
-		Privileges: [1]win.LUIDAndAttributes{
+		Privileges: [1]windows.LUIDAndAttributes{
 			{
 				Luid:       luid,
 				Attributes: attr,
 			},
 		},
 	}
-	err = win.AdjustTokenPrivileges(token, false, &tp, 0, nil, nil)
+	err = windows.AdjustTokenPrivileges(token, false, &tp, 0, nil, nil)
 	if err != nil {
 		return fmt.Errorf("AdjustTokenPrivileges failed: %v", err)
 
@@ -154,7 +175,7 @@ func processPrivilegeByNative(privNumber uint32, op privilegeOperate) error {
 	enable := (op == privilegeEnable)
 	fmt.Println("processPrivilegeByNative:", privNumber, enable)
 	var wasEnabled bool
-	err := RtlAdjustPrivilege(privNumber, enable, false, &wasEnabled)
+	err := ntdll.RtlAdjustPrivilege(privNumber, enable, false, &wasEnabled)
 	if err != nil {
 		return fmt.Errorf("RtlAdjustPrivilege failed: %v", err)
 	}
@@ -175,13 +196,13 @@ func CheckAdmin() (bool, error) {
 		return false, fmt.Errorf("AllocateAndInitializeSid failed: %v", err)
 	}
 	defer windows.FreeSid(amdinGroup)
-	isElevated, err := CheckTokenMembership(0, amdinGroup)
+	isElevated, err := advapi32.CheckTokenMembership(0, amdinGroup)
 	if err != nil {
 		return false, fmt.Errorf("CheckTokenMembership failed: %v", err)
 	}
 	return isElevated, nil
 }
-func TokenDisplayAccount(token win.Token) {
+func TokenDisplayAccount(token windows.Token) {
 	// windows.GetTokenInformation(token, windows.TokenStatistics, nil, 0, nil)
 	// windows.GetTokenInformation(token, windows.TokenSessionId, nil, 0, nil)
 	// windows.GetTokenInformation(token, windows.TokenElevationType, nil, 0, nil)
@@ -310,7 +331,7 @@ func PrintPrivilegeStatus(privAttr uint32) string {
 	return fmt.Sprintf("P:[%c%c%c%c]    ", c1, c2, c3, c4)
 }
 
-func GetTokenInformation(token win.Token, infoClass uint32) ([]byte, error) {
+func GetTokenInformation(token windows.Token, infoClass uint32) ([]byte, error) {
 	var size uint32
 	err := windows.GetTokenInformation(token, infoClass, nil, 0, &size)
 	if err != nil {
@@ -327,7 +348,7 @@ func GetTokenInformation(token win.Token, infoClass uint32) ([]byte, error) {
 	return buffer, nil
 }
 
-func GetTokenPrivilegeNames(tokenGroups TokenGroupsAndPrivileges) ([]PrivilegeDetail, error) {
+func GetTokenPrivilegeNames(tokenGroups advapi32.TokenGroupsAndPrivileges) ([]PrivilegeDetail, error) {
 	tokenGroupsCount := tokenGroups.PrivilegeCount
 	groups := make([]PrivilegeDetail, tokenGroupsCount)
 	for i := uint32(0); i < tokenGroupsCount; i++ {
@@ -353,7 +374,7 @@ func LookupPrivilegeNameByLuid(luid windows.LUID) (string, error) {
 		Name            = make([]uint16, 256)
 		NameSize uint32 = 0
 	)
-	err := LookupPrivilegeName(
+	err := advapi32.LookupPrivilegeName(
 		nil,
 		&luid,
 		nil,
@@ -362,7 +383,7 @@ func LookupPrivilegeNameByLuid(luid windows.LUID) (string, error) {
 	if err != windows.ERROR_INSUFFICIENT_BUFFER {
 		return "", fmt.Errorf("LookupPrivilegeName failed: %w", err)
 	}
-	err = LookupPrivilegeName(
+	err = advapi32.LookupPrivilegeName(
 		nil,
 		&luid,
 		&Name[0],
@@ -379,13 +400,13 @@ func GetJoinInformation() {
 		server     uint16
 		name       *uint16
 		bufferByte uint32
-		status     NETSETUP_JOIN_STATUS
+		status     advapi32.NETSETUP_JOIN_STATUS
 	)
 	err := windows.NetGetJoinInformation(&server, &name, &bufferByte)
 	if err != nil {
 		fmt.Println("NetGetJoinInformation failed:", err)
 		return
 	}
-	status = NETSETUP_JOIN_STATUS(bufferByte)
-	fmt.Println("NetGetJoinInformation succeeded:", server, windows.UTF16PtrToString(name), bufferByte, status.String())
+	status = advapi32.NETSETUP_JOIN_STATUS(bufferByte)
+	fmt.Println("NetGetJoinInformation succeeded:", server, windows.UTF16PtrToString(name), bufferByte, NetJoinStatfmt(status))
 }
