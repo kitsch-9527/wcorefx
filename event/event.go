@@ -1,12 +1,12 @@
 ﻿//go:build windows
 // +build windows
 
-package eve
+package event
 
 import (
 	"fmt"
 
-	"github.com/kitsch-9527/wcorefx/internal/dll/wevtapi"
+	"github.com/kitsch-9527/wcorefx/winapi/dll/wevtapi"
 	"golang.org/x/sys/windows"
 )
 

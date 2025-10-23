@@ -1,4 +1,4 @@
-﻿package eve
+﻿package event
 
 import (
 	"fmt"

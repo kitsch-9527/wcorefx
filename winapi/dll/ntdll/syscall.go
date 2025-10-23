@@ -4,7 +4,7 @@ import (
 	"syscall"
 	"unsafe"
 
-	"github.com/kitsch-9527/wcorefx/internal/common"
+	"github.com/kitsch-9527/wcorefx/winapi/common"
 	"golang.org/x/sys/windows"
 )
 

@@ -1,14 +1,14 @@
 ﻿//go:build windows
 // +build windows
 
-package se
+package sec
 
 import (
 	"fmt"
 	"unsafe"
 
-	"github.com/kitsch-9527/wcorefx/internal/dll/advapi32"
-	"github.com/kitsch-9527/wcorefx/internal/dll/ntdll"
+	"github.com/kitsch-9527/wcorefx/winapi/dll/advapi32"
+	"github.com/kitsch-9527/wcorefx/winapi/dll/ntdll"
 	"golang.org/x/sys/windows"
 )
 
@@ -27,13 +27,12 @@ const (
 	privilegeDisable                         // 2 - 禁用权限
 )
 
-// VerifyPrivileges 验证文件签名
-func VerifyPrivileges(path string) error {
+// 文件签名验证相关
+func VerifyFileSignature(path string) error {
 	fileInfo := windows.WinTrustFileInfo{
 		Size:     uint32(unsafe.Sizeof(windows.WinTrustFileInfo{})),
 		FilePath: windows.StringToUTF16Ptr(path),
 	}
-
 	winT := windows.WinTrustData{
 		Size:                            uint32(unsafe.Sizeof(windows.WinTrustData{})),
 		UIChoice:                        windows.WTD_UI_NONE,
@@ -46,90 +45,57 @@ func VerifyPrivileges(path string) error {
 	if err != nil {
 		return fmt.Errorf("WinVerifyTrustEx failed: %v", err)
 	}
-	fmt.Println("文件签名验证通过")
 	return nil
 }
 
-// SeEnableDebugPrivilege 启用调试权限
-// 参数b: true使用匿名api方法，false使用标准API方法
-// 返回值: 操作是否成功
-func SeEnableDebugPrivilege(b bool) bool {
-	if b {
-		return SeEnablePrivilege("", windows.SE_GROUP_INTEGRITY)
+// 调试权限相关
+func EnableDebugPrivilege(useNative bool) bool {
+	if useNative {
+		return EnablePrivilege("", windows.SE_GROUP_INTEGRITY)
 	} else {
-		return SeEnablePrivilege(debugName, 0)
+		return EnablePrivilege(debugName, 0)
 	}
 }
 
-// 实现 String() 方法，方便打印枚举值对应的名称（类似 C 枚举的字符串化）
-func NetJoinStatfmt(s advapi32.NETSETUP_JOIN_STATUS) string {
-	switch s {
-	case advapi32.NetSetupUnknownStatus:
-		//return "NetSetupUnknownStatus"
-		return "未知状态"
-	case advapi32.NetSetupUnjoined:
-		//return "NetSetupUnjoined"
-		return "未加入域或工作组"
-	case advapi32.NetSetupWorkgroupName:
-		//return "NetSetupWorkgroupName"
-		return "已加入工作组"
-	case advapi32.NetSetupDomainName:
-		//return "NetSetupDomainName"
-		return "已加入域"
-	default:
-		return fmt.Sprintf("NETSETUP_JOIN_STATUS(%d)", s) // 未知值时返回原始数字
-	}
-}
-
-// SeDisableDebugPrivilege 禁用调试权限
-// 参数b: true使用匿名api方法，false使用标准API方法
-// 返回值: 操作是否成功
-func SeDisableDebugPrivilege(b bool) bool {
-	if b {
-		return SeDisablePrivilege("", windows.SE_GROUP_INTEGRITY)
+func DisableDebugPrivilege(useNative bool) bool {
+	if useNative {
+		return DisablePrivilege("", windows.SE_GROUP_INTEGRITY)
 	} else {
-		return SeDisablePrivilege(debugName, 0)
+		return DisablePrivilege(debugName, 0)
 	}
 }
 
-// SeEnablePrivilege 启用指定权限
-// 参数privName: 权限名称(API方式)，为空则使用匿名api
-// 参数privNumber: 权限编号(原生方式)
-// 返回值: 操作是否成功
-func SeEnablePrivilege(privName string, privNumber int) bool {
-	if privName != "" {
-		err := processPrivilegeByApi(privName, privilegeEnable)
+// 通用权限管理
+func EnablePrivilege(name string, number int) bool {
+	if name != "" {
+		err := adjustPrivilegeByAPI(name, privilegeEnable)
 		if err != nil {
 			fmt.Println(err)
 			return false
 		}
 	} else {
-		processPrivilegeByNative(uint32(privNumber), privilegeEnable)
+		adjustPrivilegeByNative(uint32(number), privilegeEnable)
 	}
 
 	return true
 }
 
-// SeDisablePrivilege 禁用指定权限
-// 参数privName: 权限名称(API方式)，为空则使用匿名api
-// 参数privNumber: 权限编号(原生方式)
-// 返回值: 操作是否成功
-func SeDisablePrivilege(privName string, privNumber int) bool {
-	if privName != "" {
-		err := processPrivilegeByApi(privName, privilegeDisable)
+func DisablePrivilege(name string, number int) bool {
+	if name != "" {
+		err := adjustPrivilegeByAPI(name, privilegeDisable)
 		if err != nil {
 			fmt.Println(err)
 			return false
 		}
 	} else {
-		processPrivilegeByNative(uint32(privNumber), privilegeDisable)
+		adjustPrivilegeByNative(uint32(number), privilegeDisable)
 	}
 
 	return true
 }
 
-// processPrivilegeByApi 通过API方式处理权限（内部函数）
-func processPrivilegeByApi(privName string, op privilegeOperate) error {
+// 内部辅助方法
+func adjustPrivilegeByAPI(privName string, op privilegeOperate) error {
 	//fmt.Println("processPrivilegeByApi:", privName, op)
 	var token windows.Token
 	hProcess := windows.CurrentProcess()
@@ -171,7 +137,7 @@ func processPrivilegeByApi(privName string, op privilegeOperate) error {
 
 // todo 此方法有问题无法关闭bug权限后续修复
 // processPrivilegeByNative 通过未公布的ntdll.dllapi处理权限（内部函数）
-func processPrivilegeByNative(privNumber uint32, op privilegeOperate) error {
+func adjustPrivilegeByNative(privNumber uint32, op privilegeOperate) error {
 	enable := (op == privilegeEnable)
 	fmt.Println("processPrivilegeByNative:", privNumber, enable)
 	var wasEnabled bool
@@ -185,10 +151,8 @@ func processPrivilegeByNative(privNumber uint32, op privilegeOperate) error {
 	return nil
 }
 
-// CheckAdmin 检查当前进程是否具有管理员权限
-// 返回值: 是否具有管理员权限以及可能的错误
-// ture: 具有管理员权限 false: 没有管理员权限
-func CheckAdmin() (bool, error) {
+// 管理员权限检查
+func IsAdmin() (bool, error) {
 	ntAuthority := windows.SECURITY_NT_AUTHORITY
 	var amdinGroup *windows.SID
 	err := windows.AllocateAndInitializeSid(&ntAuthority, 2, windows.SECURITY_BUILTIN_DOMAIN_RID, windows.DOMAIN_ALIAS_RID_ADMINS, 0, 0, 0, 0, 0, 0, &amdinGroup)
@@ -202,7 +166,8 @@ func CheckAdmin() (bool, error) {
 	}
 	return isElevated, nil
 }
-func TokenDisplayAccount(token windows.Token) {
+
+func DisplayTokenAccount(token windows.Token) {
 	// windows.GetTokenInformation(token, windows.TokenStatistics, nil, 0, nil)
 	// windows.GetTokenInformation(token, windows.TokenSessionId, nil, 0, nil)
 	// windows.GetTokenInformation(token, windows.TokenElevationType, nil, 0, nil)
@@ -210,66 +175,27 @@ func TokenDisplayAccount(token windows.Token) {
 
 	windows.GetTokenInformation(token, windows.TokenOrigin, nil, 0, nil)
 }
-func PrintSIDAttributes(l string, sidsAttr uint32) string {
-	// 检查每个标志位并确定对应的字符
-	c1 := ' '
-	if sidsAttr&windows.SE_GROUP_MANDATORY != 0 {
-		c1 = 'M'
-	}
-
-	c2 := ' '
-	if sidsAttr&windows.SE_GROUP_ENABLED_BY_DEFAULT != 0 {
-		c2 = 'D'
-	}
-
-	c3 := ' '
-	if sidsAttr&windows.SE_GROUP_ENABLED != 0 {
-		c3 = 'E'
-	}
-
-	c4 := ' '
-	if sidsAttr&windows.SE_GROUP_OWNER != 0 {
-		c4 = 'O'
-	}
-
-	c5 := ' '
-	if sidsAttr&windows.SE_GROUP_USE_FOR_DENY_ONLY != 0 {
-		c5 = 'U'
-	}
-
-	c6 := ' '
-	if sidsAttr&windows.SE_GROUP_LOGON_ID != 0 {
-		c6 = 'L'
-	}
-
-	c7 := ' '
-	if sidsAttr&windows.SE_GROUP_RESOURCE != 0 {
-		c7 = 'R'
-	}
-	// 格式化输出，与原C++代码保持一致的格式
-	return fmt.Sprintf("g:[%c%c%c%c%c%c%c] ", c1, c2, c3, c4, c5, c6, c7)
-}
 
 type PrivilegeDetail struct {
 	Status string
 	Name   string
 }
 
-func TokenDisplayAccountSid(u string, cont uint32, sids *windows.SIDAndAttributes) ([]PrivilegeDetail, error) {
-	pList := make([]PrivilegeDetail, cont)
-	for i := 0; i < int(cont); i++ {
+func GetTokenAccountSIDs(userType string, count uint32, sids *windows.SIDAndAttributes) ([]PrivilegeDetail, error) {
+	pList := make([]PrivilegeDetail, count)
+	for i := 0; i < int(count); i++ {
 		sidAttrAddr := uintptr(unsafe.Pointer(sids)) + uintptr(i)*unsafe.Sizeof(windows.SIDAndAttributes{})
 		sid := (*windows.SIDAndAttributes)(unsafe.Pointer(sidAttrAddr))
-		d, n, err := GetDonameInSid(sid.Sid)
+		d, n, err := LookupSIDAccount(sid.Sid)
 		if err != nil {
 			return nil, err
 		}
-		pList[i] = PrivilegeDetail{Status: PrintSIDAttributes(u, sid.Attributes), Name: fmt.Sprint(d, "/", n)}
+		pList[i] = PrivilegeDetail{Status: FormatSIDAttributes(userType, sid.Attributes), Name: fmt.Sprint(d, "/", n)}
 	}
 	return pList, nil
 }
 
-func GetDonameInSid(sid *windows.SID) (string, string, error) {
+func LookupSIDAccount(sid *windows.SID) (domain, name string, err error) {
 
 	// 查找账户名
 	var (
@@ -277,7 +203,7 @@ func GetDonameInSid(sid *windows.SID) (string, string, error) {
 		domainSize   uint32 = 0
 		sidNameUse   uint32
 	)
-	err := windows.LookupAccountSid(nil, sid, nil, &userNameSize, nil, &domainSize, &sidNameUse)
+	err = windows.LookupAccountSid(nil, sid, nil, &userNameSize, nil, &domainSize, &sidNameUse)
 	if err != nil {
 		if err != windows.ERROR_INSUFFICIENT_BUFFER {
 			return "", "", fmt.Errorf("LookupAccountSid failed: %w", err)
@@ -303,32 +229,13 @@ func GetDonameInSid(sid *windows.SID) (string, string, error) {
 	return windows.UTF16ToString(domainName[:domainSize]), windows.UTF16ToString(userName[:userNameSize]), nil
 }
 
-// PrintPrivilegeStatus 格式化打印权限属性状态
-// 参数：privAttr 是权限的Attributes值
-func PrintPrivilegeStatus(privAttr uint32) string {
-	// 检查每个标志位并确定对应的字符
-	c1 := ' '
-	if privAttr&windows.SE_PRIVILEGE_ENABLED_BY_DEFAULT != 0 {
-		c1 = 'D'
+// Token 信息获取
+func GetTokenGroupsAndPrivileges(token windows.Token) (*advapi32.TokenGroupsAndPrivileges, error) {
+	buffer, err := GetTokenInformation(token, windows.TokenGroupsAndPrivileges)
+	if err != nil {
+		return nil, err
 	}
-
-	c2 := ' '
-	if privAttr&windows.SE_PRIVILEGE_ENABLED != 0 {
-		c2 = 'E'
-	}
-
-	c3 := ' '
-	if privAttr&windows.SE_PRIVILEGE_REMOVED != 0 {
-		c3 = 'R'
-	}
-
-	c4 := ' '
-	if privAttr&windows.SE_PRIVILEGE_USED_FOR_ACCESS != 0 {
-		c4 = 'A'
-	}
-
-	// 格式化输出，与原C++代码保持一致的格式
-	return fmt.Sprintf("P:[%c%c%c%c]    ", c1, c2, c3, c4)
+	return (*advapi32.TokenGroupsAndPrivileges)(unsafe.Pointer(&buffer[0])), nil
 }
 
 func GetTokenInformation(token windows.Token, infoClass uint32) ([]byte, error) {
@@ -357,19 +264,19 @@ func GetTokenPrivilegeNames(tokenGroups advapi32.TokenGroupsAndPrivileges) ([]Pr
 		//内存指针转换
 		luid := (*windows.LUIDAndAttributes)(unsafe.Pointer(liuAttrAddr))
 		attributes := luid.Attributes
-		name, err := LookupPrivilegeNameByLuid(luid.Luid)
+		name, err := LookupPrivilegeNameByLUID(luid.Luid)
 		if err != nil {
 			return nil, err
 		}
 		groups[i] = PrivilegeDetail{
-			Status: PrintPrivilegeStatus(attributes),
+			Status: FormatPrivilegeStatus(attributes),
 			Name:   name,
 		}
 	}
 	return groups, nil
 }
 
-func LookupPrivilegeNameByLuid(luid windows.LUID) (string, error) {
+func LookupPrivilegeNameByLUID(luid windows.LUID) (string, error) {
 	var (
 		Name            = make([]uint16, 256)
 		NameSize uint32 = 0
@@ -395,7 +302,8 @@ func LookupPrivilegeNameByLuid(luid windows.LUID) (string, error) {
 	return windows.UTF16ToString(Name[:NameSize]), nil
 }
 
-func GetJoinInformation() {
+// 域信息相关
+func GetDomainJoinInfo() {
 	var (
 		server     uint16
 		name       *uint16
@@ -408,5 +316,5 @@ func GetJoinInformation() {
 		return
 	}
 	status = advapi32.NETSETUP_JOIN_STATUS(bufferByte)
-	fmt.Println("NetGetJoinInformation succeeded:", server, windows.UTF16PtrToString(name), bufferByte, NetJoinStatfmt(status))
+	fmt.Println("NetGetJoinInformation succeeded:", server, windows.UTF16PtrToString(name), bufferByte, FormatJoinStatus(status))
 }

@@ -6,8 +6,8 @@ package os
 import (
 	"fmt"
 
-	"github.com/kitsch-9527/wcorefx/internal/dll/kernel32"
-	"github.com/kitsch-9527/wcorefx/internal/dll/wtsapi32"
+	"github.com/kitsch-9527/wcorefx/winapi/dll/kernel32"
+	"github.com/kitsch-9527/wcorefx/winapi/dll/wtsapi32"
 	"golang.org/x/sys/windows"
 )
 
@@ -32,8 +32,8 @@ func GetGroupsBySid(sid *windows.SID) {
 
 }
 
-// GetProcessorNumber 获取CPU数量
-func GetProcessorNumber() uint32 {
+// GetCPUCount 获取CPU数量
+func GetCPUCount() uint32 {
 	systemInfo := kernel32.GetSystemInfo()
 	return systemInfo.DwNumberOfProcessors
 }

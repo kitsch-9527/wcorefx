@@ -18,7 +18,7 @@ type InfoType string
 const (
 	FileDescription  InfoType = "FileDescription"  // 文件描述信息
 	CompanyName      InfoType = "CompanyName"      // 公司名称
-	InternalName     InfoType = "InternalName"     // 内部名称
+	winapiName       InfoType = "winapiName"       // 内部名称
 	OriginalFileName InfoType = "OriginalFileName" // 原始文件名
 	LegalCopyright   InfoType = "LegalCopyright"   // 版权信息
 	ProductName      InfoType = "ProductName"      // 产品名称
@@ -215,4 +215,23 @@ func GetFileVersionInfo(path string) (string, error) {
 	revision := fixedInfo.FileVersionLS & 0xFFFF
 
 	return fmt.Sprintf("%d.%d.%d.%d", major, minor, build, revision), nil
+}
+
+// NativePathToDosPath 将 native 路径映射为标准盘符路径
+func NativePathToDosPath(nativePath string) (string, error) {
+	// 枚举所有盘符
+	for c := 'A'; c <= 'Z'; c++ {
+		dosDevice := fmt.Sprintf("%c:", c)
+		var target [comm.MAXPATH + 1]uint16
+		n, err := windows.QueryDosDevice(windows.StringToUTF16Ptr(dosDevice), &target[0], comm.MAXPATH)
+		if err != nil || n == 0 {
+			continue
+		}
+		devicePath := windows.UTF16ToString(target[:n])
+		if len(devicePath) > 0 && len(nativePath) > len(devicePath) && nativePath[:len(devicePath)] == devicePath {
+			// 替换为盘符路径
+			return fmt.Sprintf("%s%s", dosDevice, nativePath[len(devicePath):]), nil
+		}
+	}
+	return "", fmt.Errorf("did not find a matching dos device for native path: %s", nativePath)
 }

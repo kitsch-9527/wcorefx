@@ -11,8 +11,8 @@ import (
 	"reflect"
 	"unsafe"
 
-	"github.com/kitsch-9527/wcorefx/internal/dll/fwpuclnt"
-	"github.com/kitsch-9527/wcorefx/internal/dll/iphlpapi"
+	"github.com/kitsch-9527/wcorefx/winapi/dll/fwpuclnt"
+	"github.com/kitsch-9527/wcorefx/winapi/dll/iphlpapi"
 	"golang.org/x/sys/windows"
 )
 

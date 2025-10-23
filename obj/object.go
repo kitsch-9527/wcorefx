@@ -1,7 +1,7 @@
 ﻿//go:build windows
 // +build windows
 
-package ob
+package obj
 
 import (
 	"fmt"
@@ -9,8 +9,8 @@ import (
 	"syscall"
 
 	comm "github.com/kitsch-9527/wcorefx/common"
-	"github.com/kitsch-9527/wcorefx/internal/dll/psapi"
 	"github.com/kitsch-9527/wcorefx/os"
+	"github.com/kitsch-9527/wcorefx/winapi/dll/psapi"
 	"golang.org/x/sys/windows"
 )
 
