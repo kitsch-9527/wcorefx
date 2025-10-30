@@ -1,5 +1,6 @@
 ﻿//go:build windows
 // +build windows
+
 package reg
 
 import (
@@ -82,4 +83,21 @@ func TestRegPath(t *testing.T) {
 		fmt.Print(err)
 	}
 	fmt.Printf("Windows system root is %q\n", s)
+}
+
+// 添加注册表根据路径导出为reg 文件 使用Windows api
+func ExportRegPathToFile(regPath string, filePath string) error {
+	rootKey, patch, err := parsePath(regPath)
+	if err != nil {
+		return err
+	}
+
+	k, err := registry.OpenKey(rootKey, patch, registry.QUERY_VALUE)
+	if err != nil {
+		return err
+	}
+	defer k.Close()
+
+	// 使用 Windows API 导出注册表路径
+	return nil
 }

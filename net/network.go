@@ -11,7 +11,9 @@ import (
 	"reflect"
 	"unsafe"
 
-	win "golang.org/x/sys/windows"
+	"github.com/kitsch-9527/wcorefx/winapi/dll/fwpuclnt"
+	"github.com/kitsch-9527/wcorefx/winapi/dll/iphlpapi"
+	"golang.org/x/sys/windows"
 )
 
 // MIB_TCPROW_OWNER_PID 对应Windows API中的结构体
@@ -176,7 +178,7 @@ func getUdpTableBuffer(sort bool, af int, tableClass, reserved uint32) ([]byte, 
 	var bufferSize uint32 = 0
 
 	// 第一次调用获取所需缓冲区大小
-	err := GetExtendedUdpTable(nil, &bufferSize, sort, uint32(af), tableClass, reserved)
+	err := iphlpapi.GetExtendedUdpTable(nil, &bufferSize, sort, uint32(af), tableClass, reserved)
 	if err != nil && bufferSize == 0 {
 		return nil, 0, fmt.Errorf("获取缓冲区大小失败: %w", err)
 	}
@@ -188,7 +190,7 @@ func getUdpTableBuffer(sort bool, af int, tableClass, reserved uint32) ([]byte, 
 	}
 
 	// 第二次调用获取实际数据
-	if err = GetExtendedUdpTable(&buffer[0], &bufferSize, sort, uint32(af), tableClass, reserved); err != nil {
+	if err = iphlpapi.GetExtendedUdpTable(&buffer[0], &bufferSize, sort, uint32(af), tableClass, reserved); err != nil {
 		return nil, 0, fmt.Errorf("获取UDP表数据失败: %w", err)
 	}
 
@@ -206,7 +208,7 @@ func getTcpTableBuffer(sort bool, af int, tableClass, reserved uint32) ([]byte, 
 	var bufferSize uint32 = 0
 
 	// 第一次调用获取所需缓冲区大小
-	err := GetExtendedTcpTable(nil, &bufferSize, sort, uint32(af), tableClass, reserved)
+	err := iphlpapi.GetExtendedTcpTable(nil, &bufferSize, sort, uint32(af), tableClass, reserved)
 	if err != nil && bufferSize == 0 {
 		return nil, 0, fmt.Errorf("获取缓冲区大小失败: %w", err)
 	}
@@ -217,7 +219,7 @@ func getTcpTableBuffer(sort bool, af int, tableClass, reserved uint32) ([]byte, 
 		return nil, 0, errors.New("缓冲区分配大小不匹配")
 	}
 	// 第二次调用获取实际数据
-	if err = GetExtendedTcpTable(&buffer[0], &bufferSize, sort, uint32(af), tableClass, reserved); err != nil {
+	if err = iphlpapi.GetExtendedTcpTable(&buffer[0], &bufferSize, sort, uint32(af), tableClass, reserved); err != nil {
 		return nil, 0, fmt.Errorf("获取TCP表数据失败: %w", err)
 	}
 
@@ -367,43 +369,43 @@ func GetUdp6Endpoints(sort bool, tableClass uint32, reserved uint32) ([]MIB_UDP6
 // CalloutInfo 存储标注的关键信息
 type CalloutInfo struct {
 	CalloutId   uint32
-	CalloutKey  win.GUID
+	CalloutKey  windows.GUID
 	Name        string
 	Description string
 }
 type FwpmCallout = struct {
-	CalloutKey   win.GUID
+	CalloutKey   windows.GUID
 	Name         string
 	Description  string
-	Flags        fwpmFilterFlags
-	ProviderKey  *win.GUID
-	ProviderData fwpByteBlob
-	LayerKey     LayerID
+	Flags        fwpuclnt.FwpmFilterFlags
+	ProviderKey  *windows.GUID
+	ProviderData fwpuclnt.FwpByteBlob
+	LayerKey     fwpuclnt.LayerID
 	CalloutId    uint32
 }
 
 // callouts 全局变量，存储标注信息
 func EnumWfpCallouts() ([]FwpmCallout, error) {
 	var (
-		callouts   []*fwpmCallout0
+		callouts   []*fwpuclnt.FwpmCallout0
 		numEntries uint32
-		array      **fwpmCallout0
+		array      **fwpuclnt.FwpmCallout0
 	)
-	ssion := fwpmSession0{
-		DisplayData: fwpmDisplayData0{Name: win.StringToUTF16Ptr("WFPSampler's User Mode Session")},
+	ssion := fwpuclnt.FwpmSession0{
+		DisplayData: fwpuclnt.FwpmDisplayData0{Name: windows.StringToUTF16Ptr("WFPSampler's User Mode Session")},
 		Flags:       0,
 	}
-	engineH, err := FwpmEngineOpen(nil, uint32(RPC_C_AUTHN_WINNT), nil, &ssion)
+	engineH, err := fwpuclnt.FwpmEngineOpen(nil, uint32(RPC_C_AUTHN_WINNT), nil, &ssion)
 	if err != nil {
 		return nil, fmt.Errorf("FwpmEngineOpen failed: %w", err)
 	}
-	defer FwpmEngineClose(engineH)
-	enumH, err := FwpmCalloutCreateEnumHandle(engineH, nil)
+	defer fwpuclnt.FwpmEngineClose(engineH)
+	enumH, err := fwpuclnt.FwpmCalloutCreateEnumHandle(engineH, nil)
 	if err != nil {
 		return nil, fmt.Errorf("FwpmCalloutCreateEnumHandle failed: %w", err)
 	}
-	defer FwpmCalloutDestroyEnumHandle(engineH, enumH)
-	err = FwpmCalloutEnum(engineH, enumH, 0xFFFFFFFF, &array, &numEntries)
+	defer fwpuclnt.FwpmCalloutDestroyEnumHandle(engineH, enumH)
+	err = fwpuclnt.FwpmCalloutEnum(engineH, enumH, 0xFFFFFFFF, &array, &numEntries)
 	if err != nil {
 		return nil, fmt.Errorf("FwpmCalloutEnum failed: %w", err)
 	}
@@ -414,14 +416,14 @@ func EnumWfpCallouts() ([]FwpmCallout, error) {
 	sh.Cap = int(numEntries)
 	sh.Len = int(numEntries)
 	sh.Data = uintptr(unsafe.Pointer(array))
-	defer FwpmFreeMemory((*struct{})(unsafe.Pointer(&array)))
+	defer fwpuclnt.FwpmFreeMemory((*struct{})(unsafe.Pointer(&array)))
 	var infos []FwpmCallout
 	for _, callout := range callouts {
 		info := FwpmCallout{
 			CalloutKey:   callout.CalloutKey,
 			CalloutId:    callout.CalloutId,
-			Name:         win.UTF16PtrToString(callout.DisplayData.Name),
-			Description:  win.UTF16PtrToString(callout.DisplayData.Description),
+			Name:         windows.UTF16PtrToString(callout.DisplayData.Name),
+			Description:  windows.UTF16PtrToString(callout.DisplayData.Description),
 			Flags:        callout.Flags,
 			ProviderKey:  callout.ProviderKey,
 			ProviderData: callout.ProviderData,
@@ -434,51 +436,51 @@ func EnumWfpCallouts() ([]FwpmCallout, error) {
 }
 
 type FwpmFilter struct {
-	FilterKey           win.GUID
+	FilterKey           windows.GUID
 	Name                string
 	Description         string
-	Flags               fwpmFilterFlags
-	ProviderKey         *win.GUID
-	ProviderData        fwpByteBlob
-	LayerKey            LayerID
-	SublayerKey         SublayerID
-	Weight              fwpValue0
+	Flags               fwpuclnt.FwpmFilterFlags
+	ProviderKey         *windows.GUID
+	ProviderData        fwpuclnt.FwpByteBlob
+	LayerKey            fwpuclnt.LayerID
+	SublayerKey         fwpuclnt.SublayerID
+	Weight              fwpuclnt.FwpValue0
 	NumFilterConditions uint32
-	FilterConditions    *fwpmFilterCondition0
-	Action              fwpmAction0
+	FilterConditions    *fwpuclnt.FwpmFilterCondition0
+	Action              fwpuclnt.FwpmAction0
 	// Only one of RawContext/ProviderContextKey must be set.
 	RawContext         uint64
-	ProviderContextKey win.GUID
-	Reserved           *win.GUID
+	ProviderContextKey windows.GUID
+	Reserved           *windows.GUID
 	FilterID           uint64
-	EffectiveWeight    fwpValue0
+	EffectiveWeight    fwpuclnt.FwpValue0
 }
 
 // callouts 全局变量，存储标注信息
 func EnumWfpFilters() ([]FwpmFilter, error) {
 
 	var (
-		filters    []*fwpmFilter0
+		filters    []*fwpuclnt.FwpmFilter0
 		numEntries uint32
-		array      **fwpmFilter0
+		array      **fwpuclnt.FwpmFilter0
 	)
-	ssion := fwpmSession0{
-		DisplayData: fwpmDisplayData0{Name: win.StringToUTF16Ptr("WFPSampler's User Mode Session")},
+	ssion := fwpuclnt.FwpmSession0{
+		DisplayData: fwpuclnt.FwpmDisplayData0{Name: windows.StringToUTF16Ptr("WFPSampler's User Mode Session")},
 		Flags:       0,
 	}
 	//var ssion FWPM_SESSION0
-	engineH, err := FwpmEngineOpen(nil, uint32(RPC_C_AUTHN_WINNT), nil, &ssion)
+	engineH, err := fwpuclnt.FwpmEngineOpen(nil, uint32(RPC_C_AUTHN_WINNT), nil, &ssion)
 	if err != nil {
 		return nil, fmt.Errorf("FwpmEngineOpen failed: %w", err)
 	}
-	defer FwpmEngineClose(engineH)
-	enumH, err := FwpmFilterCreateEnumHandle(engineH, nil)
+	defer fwpuclnt.FwpmEngineClose(engineH)
+	enumH, err := fwpuclnt.FwpmFilterCreateEnumHandle(engineH, nil)
 	if err != nil {
 		return nil, fmt.Errorf("FwpmFilterCreateEnumHandle failed: %w", err)
 	}
-	defer FwpmFilterDestroyEnumHandle(engineH, enumH)
+	defer fwpuclnt.FwpmFilterDestroyEnumHandle(engineH, enumH)
 
-	err = FwpmFilterEnum(engineH, enumH, 0xFFFFFFFF, &array, &numEntries)
+	err = fwpuclnt.FwpmFilterEnum(engineH, enumH, 0xFFFFFFFF, &array, &numEntries)
 	if err != nil {
 		return nil, fmt.Errorf("FwpmFilterEnum failed: %w", err)
 	}
@@ -491,13 +493,13 @@ func EnumWfpFilters() ([]FwpmFilter, error) {
 	sh.Cap = int(numEntries)
 	sh.Len = int(numEntries)
 	sh.Data = uintptr(unsafe.Pointer(array))
-	defer FwpmFreeMemory((*struct{})(unsafe.Pointer(&array)))
+	defer fwpuclnt.FwpmFreeMemory((*struct{})(unsafe.Pointer(&array)))
 	var infos []FwpmFilter
 	for _, filter := range filters {
 		info := FwpmFilter{
 			FilterKey:   filter.FilterKey,
-			Name:        win.UTF16PtrToString(filter.DisplayData.Name),
-			Description: win.UTF16PtrToString(filter.DisplayData.Description),
+			Name:        windows.UTF16PtrToString(filter.DisplayData.Name),
+			Description: windows.UTF16PtrToString(filter.DisplayData.Description),
 			//DisplayData:         filter.DisplayData,
 			Flags:               filter.Flags,
 			ProviderKey:         filter.ProviderKey,

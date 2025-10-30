@@ -10,15 +10,18 @@ import (
 
 	"github.com/emirpasic/gods/maps/treemap"
 	"github.com/emirpasic/gods/utils"
-	"github.com/kitsch-9527/wcorefx/comm"
-	"github.com/kitsch-9527/wcorefx/se"
+	comm "github.com/kitsch-9527/wcorefx/common"
+	"github.com/kitsch-9527/wcorefx/fs"
+	se "github.com/kitsch-9527/wcorefx/sec"
+	"github.com/kitsch-9527/wcorefx/winapi/dll/ntdll"
+	"github.com/kitsch-9527/wcorefx/winapi/dll/psapi"
 	"golang.org/x/sys/windows"
 )
 
-// 句柄池
+// todo 后续增加进程map 缓存
 // EnumProcessMap 枚举所有进程返回treeset map
 // key为进程id，值为进程信息结构体 windows.ProcessEntry32
-func EnumProcessMap() (*treemap.Map, error) {
+func GetMap() (*treemap.Map, error) {
 	tree := treemap.NewWith(utils.UInt32Comparator)
 	h, err := windows.CreateToolhelp32Snapshot(windows.TH32CS_SNAPPROCESS, 0)
 	if err != nil {
@@ -42,7 +45,7 @@ func EnumProcessMap() (*treemap.Map, error) {
 }
 
 // EnumProcess 枚举所有进程返回进程列表
-func EnumProcessList() ([]windows.ProcessEntry32, error) {
+func GetList() ([]windows.ProcessEntry32, error) {
 	h, err := windows.CreateToolhelp32Snapshot(windows.TH32CS_SNAPPROCESS, 0)
 	if err != nil {
 		return nil, fmt.Errorf("CreateToolhelp32Snapshot failed: %w", err)
@@ -74,9 +77,9 @@ type ProcessTimes struct {
 
 // IsDeleted 判断指定进程是否已被删除
 // false表示进程存在，true表示进程已被删除
-func IsDeleted(pid uint32) bool {
+func IsTerminated(pid uint32) bool {
 	result := false
-	h, err := OpenProcessMinHandle(pid)
+	h, err := OpenWithMinimalAccess(pid)
 	defer windows.CloseHandle(h)
 	if err != nil {
 		result = true
@@ -95,7 +98,7 @@ func IsDeleted(pid uint32) bool {
 }
 
 // 根据进程ID获取会话ID
-func SessionIdFromPid(pid uint32) (uint32, error) {
+func GetSessionID(pid uint32) (uint32, error) {
 	var sessionid uint32
 	err := windows.ProcessIdToSessionId(pid, &sessionid)
 	if err != nil {
@@ -105,14 +108,14 @@ func SessionIdFromPid(pid uint32) (uint32, error) {
 }
 
 // GetProcMemoryInfo 获取指定进程的内存信息
-func GetProcMemoryInfo(pid uint32) (PROCESS_MEMORY_COUNTERS, error) {
-	var mem PROCESS_MEMORY_COUNTERS
-	c, err := OpenProcessMinHandle(pid)
+func GetMemoryInfo(pid uint32) (psapi.PROCESS_MEMORY_COUNTERS, error) {
+	var mem psapi.PROCESS_MEMORY_COUNTERS
+	c, err := OpenWithMinimalAccess(pid)
 	if err != nil {
 		return mem, err
 	}
 	defer windows.CloseHandle(c)
-	if err := getProcessMemoryInfo(c, &mem); err != nil {
+	if err := psapi.GetProcessMemoryInfo(c, &mem); err != nil {
 		return mem, fmt.Errorf("getProcessMemoryInfo failed: %w", err)
 	}
 
@@ -120,8 +123,8 @@ func GetProcMemoryInfo(pid uint32) (PROCESS_MEMORY_COUNTERS, error) {
 }
 
 // GetCreateTime 获取指定进程的创建时间
-func GetProcTime(pid uint32) (ProcessTimes, error) {
-	h, err := OpenProcessMinHandle(pid)
+func GetTimes(pid uint32) (ProcessTimes, error) {
+	h, err := OpenWithMinimalAccess(pid)
 	if err != nil {
 		return ProcessTimes{}, err
 	}
@@ -143,21 +146,21 @@ func GetProcTime(pid uint32) (ProcessTimes, error) {
 }
 
 // GetParentPid 获取指定进程的父进程id
-func GetParentPid(pid uint32) uint32 {
-	h, err := OpenProcessMinHandle(pid)
+func GetParentID(pid uint32) uint32 {
+	h, err := OpenWithMinimalAccess(pid)
 	if err != nil {
 		return 0
 	}
 	defer windows.CloseHandle(h)
-	pbi, err := GetProcBasicInfo(h)
+	pbi, err := GetBasicInfo(h)
 	if err != nil {
 		return 0
 	}
 	return uint32(pbi.InheritedFromUniqueProcessId)
 }
 
-// OpenProcessMinHandle 打开指定进程的句柄，最小权限
-func OpenProcessMinHandle(pid uint32) (windows.Handle, error) {
+// OpenWithMinimalAccess 打开指定进程的句柄，最小权限
+func OpenWithMinimalAccess(pid uint32) (windows.Handle, error) {
 	handle, err := windows.OpenProcess(windows.PROCESS_QUERY_LIMITED_INFORMATION, false, pid)
 	if err != nil {
 		return 0, fmt.Errorf("failed to open process limitied handle: %w", err)
@@ -165,8 +168,8 @@ func OpenProcessMinHandle(pid uint32) (windows.Handle, error) {
 	return handle, nil
 }
 
-// OpenProcessHandle 打开指定进程的句柄
-func OpenProcessHandle(processId uint32) (windows.Handle, error) {
+// OpenProcessWithFullAccess 打开指定进程的句柄
+func OpenWithFullAccess(processId uint32) (windows.Handle, error) {
 	handle, err := windows.OpenProcess(windows.PROCESS_ALL_ACCESS, true, processId)
 	if err != nil {
 		return 0, fmt.Errorf("OpenProcess failed: %w", err)
@@ -174,8 +177,8 @@ func OpenProcessHandle(processId uint32) (windows.Handle, error) {
 	return handle, nil
 }
 
-// GetProcBasicInfo 获取指定进程的基本信息
-func GetProcBasicInfo(h windows.Handle) (windows.PROCESS_BASIC_INFORMATION, error) {
+// GetProcessBasicInfo 获取指定进程的基本信息
+func GetBasicInfo(h windows.Handle) (windows.PROCESS_BASIC_INFORMATION, error) {
 	var retlen uint32
 	pe := windows.PROCESS_BASIC_INFORMATION{}
 	err := windows.NtQueryInformationProcess(h, windows.ProcessBasicInformation, unsafe.Pointer(&pe), uint32(unsafe.Sizeof(pe)), &retlen)
@@ -185,13 +188,13 @@ func GetProcBasicInfo(h windows.Handle) (windows.PROCESS_BASIC_INFORMATION, erro
 	return pe, nil
 }
 
-func GetProcCmdLine(pid uint32) (string, error) {
+func GetCommandLine(pid uint32) (string, error) {
 	h, err := windows.OpenProcess(windows.PROCESS_QUERY_INFORMATION|windows.PROCESS_VM_READ, false, pid)
 	if err != nil {
 		return "", fmt.Errorf("OpenProcess failed: %w", err)
 	}
 	defer windows.CloseHandle(h)
-	basicInfo, err := GetProcBasicInfo(h)
+	basicInfo, err := GetBasicInfo(h)
 	if err != nil {
 		return "", err
 	}
@@ -260,10 +263,10 @@ func GetProcCmdLine(pid uint32) (string, error) {
 	return windows.UTF16ToString(buf), nil
 }
 
-// OpenProcToken 打开指定进程的令牌
-func OpenProcToken(pid uint32) (windows.Token, error) {
+// OpenProcessToken 打开指定进程的令牌
+func OpenToken(pid uint32) (windows.Token, error) {
 	var token windows.Token
-	h, err := OpenProcessMinHandle(pid)
+	h, err := OpenWithMinimalAccess(pid)
 	if err != nil {
 		return 0, err
 	}
@@ -276,8 +279,8 @@ func OpenProcToken(pid uint32) (windows.Token, error) {
 }
 
 // GetProcUserName 获取指定进程的用户名
-func GetProcUserName(pid uint32) (string, string, error) {
-	token, err := OpenProcToken(pid)
+func GetUser(pid uint32) (string, string, error) {
+	token, err := OpenToken(pid)
 	if err != nil {
 		return "", "", err
 	}
@@ -296,7 +299,7 @@ func GetProcUserName(pid uint32) (string, string, error) {
 	}
 	// 解析TOKEN_USER结构
 	tokenUser := (*windows.Tokenuser)(unsafe.Pointer(&buffer[0]))
-	return se.GetDonameInSid(tokenUser.User.Sid)
+	return se.LookupSIDAccount(tokenUser.User.Sid)
 }
 
 // GetModuleFileName 获得指定模块的路径
@@ -348,7 +351,7 @@ func EnumProcessModules(handle windows.Handle) ([]windows.Handle, error) {
 }
 
 // PsGetProcessPath 获取指定进程的路径
-func PsGetProcessPath(pid uint32) (string, error) {
+func GetPath(pid uint32) (string, error) {
 	if pid == 0 {
 		return "System Idle Process", nil
 	}
@@ -356,7 +359,7 @@ func PsGetProcessPath(pid uint32) (string, error) {
 		return "System", nil
 	}
 	var handle windows.Handle
-	handle, err := OpenProcessMinHandle(pid)
+	handle, err := OpenWithMinimalAccess(pid)
 	if err != nil {
 		return "", err
 	}
@@ -368,7 +371,7 @@ func PsGetProcessPath(pid uint32) (string, error) {
 		windows.QueryFullProcessImageName(handle, windows.PROCESS_NAME_NATIVE, &path[0], &size)
 		nativePath := windows.UTF16ToString(path[:size])
 		// 映射 native 路径到盘符路径
-		mappedPath, mapErr := NativePathToDosPath(nativePath)
+		mappedPath, mapErr := fs.NativePathToDosPath(nativePath)
 		if mapErr != nil {
 			return "", mapErr
 		}
@@ -377,26 +380,7 @@ func PsGetProcessPath(pid uint32) (string, error) {
 	return path, nil
 }
 
-// NativePathToDosPath 将 native 路径映射为标准盘符路径
-func NativePathToDosPath(nativePath string) (string, error) {
-	// 枚举所有盘符
-	for c := 'A'; c <= 'Z'; c++ {
-		dosDevice := fmt.Sprintf("%c:", c)
-		var target [comm.MAXPATH + 1]uint16
-		n, err := windows.QueryDosDevice(windows.StringToUTF16Ptr(dosDevice), &target[0], comm.MAXPATH)
-		if err != nil || n == 0 {
-			continue
-		}
-		devicePath := windows.UTF16ToString(target[:n])
-		if len(devicePath) > 0 && len(nativePath) > len(devicePath) && nativePath[:len(devicePath)] == devicePath {
-			// 替换为盘符路径
-			return fmt.Sprintf("%s%s", dosDevice, nativePath[len(devicePath):]), nil
-		}
-	}
-	return "", fmt.Errorf("did not find a matching dos device for native path: %s", nativePath)
-}
-
-func GetProcessAllOpenFile(pid uint32) error {
+func GetOpenFiles(pid uint32) error {
 	var (
 		buffer       []byte
 		returnLength uint32
@@ -418,14 +402,14 @@ func GetProcessAllOpenFile(pid uint32) error {
 	if err != nil {
 		return fmt.Errorf("NtQuerySystemInformation failed: %w", err)
 	}
-	handleTable := (*PSystemHandleInformation)(unsafe.Pointer(&buffer[0]))
+	handleTable := (*ntdll.PSystemHandleInformation)(unsafe.Pointer(&buffer[0]))
 	for i := uint32(0); i < handleTable.NumberOfHandles; i++ {
 		// 计算当前句柄条目的地址
-		entryAddr := uintptr(unsafe.Pointer(&handleTable.Handles)) + uintptr(i)*unsafe.Sizeof(SystemHandleTableEntryInfo{})
-		handleInfo := *(*SystemHandleTableEntryInfo)(unsafe.Pointer(entryAddr))
+		entryAddr := uintptr(unsafe.Pointer(&handleTable.Handles)) + uintptr(i)*unsafe.Sizeof(ntdll.SystemHandleTableEntryInfo{})
+		handleInfo := *(*ntdll.SystemHandleTableEntryInfo)(unsafe.Pointer(entryAddr))
 		if handleInfo.UniqueProcessId == uint16(pid) {
 			//fmt.Println(handleInfo)
-			h, err := duplicateAnotherProcessHandle(uint32(handleInfo.UniqueProcessId), windows.Handle(handleInfo.HandleValue))
+			h, err := duplicateProcessHandle(uint32(handleInfo.UniqueProcessId), windows.Handle(handleInfo.HandleValue))
 			if err != nil {
 				//	fmt.Println("duplicateAnotherProcessHandle error:", err)
 			} else {
@@ -438,7 +422,7 @@ func GetProcessAllOpenFile(pid uint32) error {
 					if err != nil {
 						fmt.Println("GetHandleName error:", err)
 					}
-					dosPath, err := NativePathToDosPath(n)
+					dosPath, err := fs.NativePathToDosPath(n)
 					if err == nil {
 						n = dosPath
 					}
@@ -449,8 +433,8 @@ func GetProcessAllOpenFile(pid uint32) error {
 	}
 	return nil
 }
-func duplicateAnotherProcessHandle(pid uint32, hSource windows.Handle) (windows.Handle, error) {
-	hPreces, err := OpenProcessHandle(pid)
+func duplicateProcessHandle(pid uint32, hSource windows.Handle) (windows.Handle, error) {
+	hPreces, err := OpenWithFullAccess(pid)
 	if err != nil {
 		return 0, err
 	}
@@ -463,7 +447,7 @@ func duplicateAnotherProcessHandle(pid uint32, hSource windows.Handle) (windows.
 	if err != nil {
 		return 0, fmt.Errorf("GetCurrentProcess failed: %w", err)
 	}
-	targetHandle, err := NtDuplicateObject(hPreces, hSource, hCurrent, 0, 0, 0)
+	targetHandle, err := ntdll.NtDuplicateObject(hPreces, hSource, hCurrent, 0, 0, 0)
 	if err != nil {
 		return 0, fmt.Errorf("NtDuplicateObject failed: %w", err)
 	}
@@ -475,13 +459,13 @@ func GetHandleType(h windows.Handle) (string, error) {
 	bufferSize := uint32(0x1000)
 	var returnLength uint32
 	objectTypeInfo := make([]byte, bufferSize)
-	err := NtQueryObject(h, ObjectTypeInformation, uintptr(unsafe.Pointer(&objectTypeInfo[0])), bufferSize, &returnLength)
+	err := ntdll.NtQueryObject(h, ntdll.ObjectTypeInformation, uintptr(unsafe.Pointer(&objectTypeInfo[0])), bufferSize, &returnLength)
 	if err != nil {
 		fmt.Println("NtQueryObject failed:", err)
 		return "", err
 	}
 	// 转换缓冲区为PUBLIC_OBJECT_TYPE_INFORMATION结构体
-	objTypeInfo := (*PUBLIC_OBJECT_TYPE_INFORMATION)(unsafe.Pointer(&objectTypeInfo[0]))
+	objTypeInfo := (*ntdll.PUBLIC_OBJECT_TYPE_INFORMATION)(unsafe.Pointer(&objectTypeInfo[0]))
 	return syscall.UTF16ToString(
 		unsafe.Slice(
 			objTypeInfo.TypeName.Buffer,
@@ -495,17 +479,17 @@ func GetHandleName(h windows.Handle) (string, error) {
 	bufferSize := uint32(0x1000)
 	var returnLength uint32
 	objectNameInfo := make([]byte, bufferSize)
-	err := NtQueryObject(h, ObjectNameInformation, uintptr(unsafe.Pointer(&objectNameInfo[0])), bufferSize, &returnLength)
+	err := ntdll.NtQueryObject(h, ntdll.ObjectNameInformation, uintptr(unsafe.Pointer(&objectNameInfo[0])), bufferSize, &returnLength)
 	if err == windows.STATUS_INFO_LENGTH_MISMATCH {
 		return "", fmt.Errorf("NtQueryObject failed: %w", err)
 	}
 	objectNameInfo = make([]byte, returnLength)
-	err = NtQueryObject(h, ObjectNameInformation, uintptr(unsafe.Pointer(&objectNameInfo[0])), bufferSize, &returnLength)
+	err = ntdll.NtQueryObject(h, ntdll.ObjectNameInformation, uintptr(unsafe.Pointer(&objectNameInfo[0])), bufferSize, &returnLength)
 	if err != nil {
 		return "", fmt.Errorf("NtQueryObject failed: %w", err)
 	}
 	// 转换缓冲区为OBJECT_NAME_INFORMATION结构体
-	objNameInfo := (*UNICODE_STRING)(unsafe.Pointer(&objectNameInfo[0]))
+	objNameInfo := (*ntdll.UNICODE_STRING)(unsafe.Pointer(&objectNameInfo[0]))
 	return syscall.UTF16ToString(
 		unsafe.Slice(
 			objNameInfo.Buffer,
