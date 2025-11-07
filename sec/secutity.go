@@ -151,7 +151,7 @@ func adjustPrivilegeByNative(privNumber uint32, op privilegeOperate) error {
 	return nil
 }
 
-// 管理员权限检查
+// IsAdmin 判断当前进程是否为管理员
 func IsAdmin() (bool, error) {
 	ntAuthority := windows.SECURITY_NT_AUTHORITY
 	var amdinGroup *windows.SID
@@ -167,6 +167,7 @@ func IsAdmin() (bool, error) {
 	return isElevated, nil
 }
 
+// DisplayTokenAccount 显示Token账户信息
 func DisplayTokenAccount(token windows.Token) {
 	// windows.GetTokenInformation(token, windows.TokenStatistics, nil, 0, nil)
 	// windows.GetTokenInformation(token, windows.TokenSessionId, nil, 0, nil)
@@ -181,6 +182,7 @@ type PrivilegeDetail struct {
 	Name   string
 }
 
+// GetTokenAccountSIDs 获取Token账户SID列表
 func GetTokenAccountSIDs(userType string, count uint32, sids *windows.SIDAndAttributes) ([]PrivilegeDetail, error) {
 	pList := make([]PrivilegeDetail, count)
 	for i := 0; i < int(count); i++ {
@@ -195,6 +197,7 @@ func GetTokenAccountSIDs(userType string, count uint32, sids *windows.SIDAndAttr
 	return pList, nil
 }
 
+// LookupSIDAccount 通过SID获取账户名
 func LookupSIDAccount(sid *windows.SID) (domain, name string, err error) {
 
 	// 查找账户名
@@ -229,7 +232,7 @@ func LookupSIDAccount(sid *windows.SID) (domain, name string, err error) {
 	return windows.UTF16ToString(domainName[:domainSize]), windows.UTF16ToString(userName[:userNameSize]), nil
 }
 
-// Token 信息获取
+// GetPrivilegeDisplayName 获取权限显示名称
 func GetTokenGroupsAndPrivileges(token windows.Token) (*advapi32.TokenGroupsAndPrivileges, error) {
 	buffer, err := GetTokenInformation(token, windows.TokenGroupsAndPrivileges)
 	if err != nil {
@@ -238,6 +241,7 @@ func GetTokenGroupsAndPrivileges(token windows.Token) (*advapi32.TokenGroupsAndP
 	return (*advapi32.TokenGroupsAndPrivileges)(unsafe.Pointer(&buffer[0])), nil
 }
 
+// GetTokenInformation 获取Token信息
 func GetTokenInformation(token windows.Token, infoClass uint32) ([]byte, error) {
 	var size uint32
 	err := windows.GetTokenInformation(token, infoClass, nil, 0, &size)
@@ -255,6 +259,7 @@ func GetTokenInformation(token windows.Token, infoClass uint32) ([]byte, error) 
 	return buffer, nil
 }
 
+// GetTokenPrivilegeNames 获取Token权限名称
 func GetTokenPrivilegeNames(tokenGroups advapi32.TokenGroupsAndPrivileges) ([]PrivilegeDetail, error) {
 	tokenGroupsCount := tokenGroups.PrivilegeCount
 	groups := make([]PrivilegeDetail, tokenGroupsCount)
@@ -276,6 +281,7 @@ func GetTokenPrivilegeNames(tokenGroups advapi32.TokenGroupsAndPrivileges) ([]Pr
 	return groups, nil
 }
 
+// LookupPrivilegeNameByLUID 通过LUID获取权限名称
 func LookupPrivilegeNameByLUID(luid windows.LUID) (string, error) {
 	var (
 		Name            = make([]uint16, 256)
@@ -302,8 +308,14 @@ func LookupPrivilegeNameByLUID(luid windows.LUID) (string, error) {
 	return windows.UTF16ToString(Name[:NameSize]), nil
 }
 
-// 域信息相关
-func GetDomainJoinInfo() {
+type Domain struct {
+	Server string
+	Name   string
+	Status string
+}
+
+// GetJoinStatus 获取域加入状态
+func GetDomainJoinInfo() (Domain, error) {
 	var (
 		server     uint16
 		name       *uint16
@@ -312,9 +324,13 @@ func GetDomainJoinInfo() {
 	)
 	err := windows.NetGetJoinInformation(&server, &name, &bufferByte)
 	if err != nil {
-		fmt.Println("NetGetJoinInformation failed:", err)
-		return
+		return Domain{}, fmt.Errorf("NetGetJoinInformation failed: %w", err)
 	}
 	status = advapi32.NETSETUP_JOIN_STATUS(bufferByte)
-	fmt.Println("NetGetJoinInformation succeeded:", server, windows.UTF16PtrToString(name), bufferByte, FormatJoinStatus(status))
+	statusType := FormatJoinStatus(status)
+	return Domain{
+		Server: windows.UTF16PtrToString(&server),
+		Name:   windows.UTF16PtrToString(name),
+		Status: statusType,
+	}, nil
 }
