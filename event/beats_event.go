@@ -6,9 +6,11 @@ import (
 	"os"
 	"time"
 
-	"github.com/elastic/beats/v7/winlogbeat/sys"
-	"github.com/elastic/beats/v7/winlogbeat/sys/winevent"
-	winevelog "github.com/elastic/beats/v7/winlogbeat/sys/wineventlog"
+	//"github.com/elastic/beats/v7/winlogbeat/sys"
+
+	winevelog "github.com/kitsch-9527/wcorefx/event/wineventlog"
+	//"github.com/elastic/beats/v7/winlogbeat/sys/winevent"
+	//winevelog "github.com/elastic/beats/v7/winlogbeat/sys/wineventlog"
 	"golang.org/x/sys/windows"
 )
 
@@ -20,7 +22,7 @@ const (
 
 // Record 封装事件日志记录及其元数据（补全字段赋值）
 type Record struct {
-	winevent.Event
+	Event
 	API string // 用于读取记录的事件日志API类型
 	XML string // 事件的XML表示形式
 }
@@ -42,7 +44,7 @@ type winEventLog struct {
 	maxRead      int                 // 单次最大读取数
 	lastRead     uint64              // 最后读取的记录号
 	renderBuf    []byte              // 渲染缓冲区
-	outputBuf    *sys.ByteBuffer     // XML输出缓冲区
+	outputBuf    *ByteBuffer         // XML输出缓冲区
 }
 
 // 确保winEventLog实现EventLog接口（编译期校验）
@@ -102,7 +104,7 @@ func newWinEventLog(target, eventID string) (EventLog, error) {
 		isFirstQuery: !isFile, // 仅通道日志启用首次查询逻辑
 		maxRead:      defaultMaxRead,
 		renderBuf:    make([]byte, renderBufferSize),
-		outputBuf:    sys.NewByteBuffer(renderBufferSize),
+		outputBuf:    NewByteBuffer(renderBufferSize),
 	}, nil
 }
 
@@ -180,21 +182,21 @@ func (l *winEventLog) Read() ([]Record, error) {
 		renderErr := winevelog.RenderEvent(h, 0, l.renderBuf, nil, l.outputBuf)
 
 		// 处理缓冲区不足（精简重试逻辑）
-		if bufErr, ok := renderErr.(sys.InsufficientBufferError); ok {
+		if bufErr, ok := renderErr.(InsufficientBufferError); ok {
 			l.renderBuf = make([]byte, bufErr.RequiredSize)
 			renderErr = winevelog.RenderEvent(h, 0, l.renderBuf, nil, l.outputBuf)
 		}
 
 		// 构建记录（补全API/XML字段）
 		xmlData := l.outputBuf.Bytes()
-		event, err := winevent.UnmarshalXML(xmlData)
+		event, err := UnmarshalXML(xmlData)
 		if err != nil {
 			log.Printf("warn: unmarshal xml: %v (xml: %s)", err, xmlData)
 			continue
 		}
 
 		// 补充事件元数据
-		winevent.PopulateAccount(&event.User)
+		PopulateAccount(&event.User)
 		if event.Level == "" {
 			event.Level = winevelog.EventLevel(event.LevelRaw).String()
 		}

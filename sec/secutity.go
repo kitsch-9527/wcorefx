@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"unsafe"
 
+	"github.com/kitsch-9527/wcorefx/common/exc"
 	"github.com/kitsch-9527/wcorefx/winapi/dll/advapi32"
 	"github.com/kitsch-9527/wcorefx/winapi/dll/ntdll"
 	"golang.org/x/sys/windows"
@@ -324,7 +325,9 @@ func GetDomainJoinInfo() (Domain, error) {
 	)
 	err := windows.NetGetJoinInformation(&server, &name, &bufferByte)
 	if err != nil {
-		return Domain{}, fmt.Errorf("NetGetJoinInformation failed: %w", err)
+
+		return Domain{}, exc.New("NetGetJoinInformation", err.Error())
+
 	}
 	status = advapi32.NETSETUP_JOIN_STATUS(bufferByte)
 	statusType := FormatJoinStatus(status)

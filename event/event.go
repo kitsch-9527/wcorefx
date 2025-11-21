@@ -5,6 +5,7 @@ package event
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/kitsch-9527/wcorefx/winapi/dll/wevtapi"
 	"golang.org/x/sys/windows"
@@ -20,4 +21,12 @@ func ExportLogsToEvents(evType string, queryStr, outFileStr string) error {
 		return fmt.Errorf("EvtExportLog failed with error: %v", err)
 	}
 	return nil
+}
+
+// RemoveWindowsLineEndings replaces carriage return line feed (CRLF) with
+// line feed (LF) and trims any newline character that may exist at the end
+// of the string.
+func RemoveWindowsLineEndings(s string) string {
+	s = strings.Replace(s, "\r\n", "\n", -1)
+	return strings.TrimRight(s, "\n")
 }

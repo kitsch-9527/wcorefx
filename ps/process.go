@@ -380,59 +380,59 @@ func GetPath(pid uint32) (string, error) {
 	return path, nil
 }
 
-func GetOpenFiles(pid uint32) error {
-	var (
-		buffer       []byte
-		returnLength uint32
-	)
-	// 初始缓冲区（1MB），第一次调用获取所需大小
-	buffer = make([]byte, 1024*1024)
-	err := windows.NtQuerySystemInformation(windows.SystemHandleInformation,
-		unsafe.Pointer(&buffer[0]),
-		uint32(len(buffer)),
-		&returnLength)
-	if err == windows.STATUS_INFO_LENGTH_MISMATCH {
-		returnLength += returnLength * 4
-		buffer = make([]byte, returnLength)
-		err = windows.NtQuerySystemInformation(windows.SystemHandleInformation,
-			unsafe.Pointer(&buffer[0]),
-			returnLength,
-			&returnLength)
-	}
-	if err != nil {
-		return fmt.Errorf("NtQuerySystemInformation failed: %w", err)
-	}
-	handleTable := (*ntdll.PSystemHandleInformation)(unsafe.Pointer(&buffer[0]))
-	for i := uint32(0); i < handleTable.NumberOfHandles; i++ {
-		// 计算当前句柄条目的地址
-		entryAddr := uintptr(unsafe.Pointer(&handleTable.Handles)) + uintptr(i)*unsafe.Sizeof(ntdll.SystemHandleTableEntryInfo{})
-		handleInfo := *(*ntdll.SystemHandleTableEntryInfo)(unsafe.Pointer(entryAddr))
-		if handleInfo.UniqueProcessId == uint16(pid) {
-			//fmt.Println(handleInfo)
-			h, err := duplicateProcessHandle(uint32(handleInfo.UniqueProcessId), windows.Handle(handleInfo.HandleValue))
-			if err != nil {
-				//	fmt.Println("duplicateAnotherProcessHandle error:", err)
-			} else {
-				t, err := GetHandleType(h)
-				if err != nil {
-					fmt.Println("GetHandleType error:", err)
-				}
-				if t == "File" {
-					n, err := GetHandleName(h)
-					if err != nil {
-						fmt.Println("GetHandleName error:", err)
-					}
-					dosPath, err := fs.NativePathToDosPath(n)
-					if err == nil {
-						n = dosPath
-					}
-					fmt.Println(t, ":", n)
-				}
-			}
-		}
-	}
-	return nil
-}
+// func GetOpenFiles(pid uint32) error {
+// 	var (
+// 		buffer       []byte
+// 		returnLength uint32
+// 	)
+// 	// 初始缓冲区（1MB），第一次调用获取所需大小
+// 	buffer = make([]byte, 1024*1024)
+// 	err := windows.NtQuerySystemInformation(windows.SystemHandleInformation,
+// 		unsafe.Pointer(&buffer[0]),
+// 		uint32(len(buffer)),
+// 		&returnLength)
+// 	if err == windows.STATUS_INFO_LENGTH_MISMATCH {
+// 		returnLength += returnLength * 4
+// 		buffer = make([]byte, returnLength)
+// 		err = windows.NtQuerySystemInformation(windows.SystemHandleInformation,
+// 			unsafe.Pointer(&buffer[0]),
+// 			returnLength,
+// 			&returnLength)
+// 	}
+// 	if err != nil {
+// 		return fmt.Errorf("NtQuerySystemInformation failed: %w", err)
+// 	}
+// 	handleTable := (*ntdll.PSystemHandleInformation)(unsafe.Pointer(&buffer[0]))
+// 	for i := uint32(0); i < handleTable.NumberOfHandles; i++ {
+// 		// 计算当前句柄条目的地址
+// 		entryAddr := uintptr(unsafe.Pointer(&handleTable.Handles)) + uintptr(i)*unsafe.Sizeof(ntdll.SystemHandleTableEntryInfo{})
+// 		handleInfo := *(*ntdll.SystemHandleTableEntryInfo)(unsafe.Pointer(entryAddr))
+// 		if handleInfo.UniqueProcessId == uint16(pid) {
+// 			//fmt.Println(handleInfo)
+// 			h, err := duplicateProcessHandle(uint32(handleInfo.UniqueProcessId), windows.Handle(handleInfo.HandleValue))
+// 			if err != nil {
+// 				//	fmt.Println("duplicateAnotherProcessHandle error:", err)
+// 			} else {
+// 				t, err := GetHandleType(h)
+// 				if err != nil {
+// 					fmt.Println("GetHandleType error:", err)
+// 				}
+// 				if t == "File" {
+// 					n, err := GetHandleName(h)
+// 					if err != nil {
+// 						fmt.Println("GetHandleName error:", err)
+// 					}
+// 					dosPath, err := fs.NativePathToDosPath(n)
+// 					if err == nil {
+// 						n = dosPath
+// 					}
+// 					fmt.Println(t, ":", n)
+// 				}
+// 			}
+// 		}
+// 	}
+// 	return nil
+// }
 func duplicateProcessHandle(pid uint32, hSource windows.Handle) (windows.Handle, error) {
 	hPreces, err := OpenWithFullAccess(pid)
 	if err != nil {
