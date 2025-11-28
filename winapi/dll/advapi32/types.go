@@ -25,3 +25,9 @@ type TokenGroupsAndPrivileges struct {
 	Privileges          *windows.LUIDAndAttributes // 指向LUID_AND_ATTRIBUTES数组的指针
 	AuthenticationId    windows.LUID
 }
+
+// TOKEN_ELEVATION 对应 Windows API 中的 _TOKEN_ELEVATION 结构体
+// 用于接收令牌提升状态（TokenIsElevated=1 表示进程已提升为管理员权限）
+type TokenElevation struct {
+	TokenIsElevated uint32 // 对应 C 的 DWORD（32位无符号整数）
+}

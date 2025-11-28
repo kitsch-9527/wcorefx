@@ -168,6 +168,37 @@ func IsAdmin() (bool, error) {
 	return isElevated, nil
 }
 
+func TokenElevation(procH windows.Handle) (advapi32.TokenElevation, error) {
+	var (
+		tokenH    windows.Token
+		elevation advapi32.TokenElevation
+		returnLen uint32
+	)
+	err := windows.OpenProcessToken(procH, windows.TOKEN_QUERY, &tokenH)
+	if err != nil {
+		return elevation, err
+	}
+	// 3. 调用 Windows API 获取令牌提升状态
+	// 参数说明：
+	// - tokenH：令牌句柄
+	// - TokenElevation：要查询的信息类（提升状态）
+	// - unsafe.Pointer(&elevation)：接收结果的结构体指针
+	// - unsafe.Sizeof(elevation)：结构体大小
+	// - &returnLen：返回实际读取的字节数
+	err = windows.GetTokenInformation(
+		tokenH,
+		windows.TokenElevation,
+		(*byte)(unsafe.Pointer(&elevation)), // 转换为 byte 指针（API 要求）
+		uint32(unsafe.Sizeof(elevation)),
+		&returnLen,
+	)
+	if err != nil {
+		return elevation, fmt.Errorf("GetTokenInformation failed: %w", err)
+	}
+	// 4. 判断是否为提升状态（TokenIsElevated=1 表示管理员权限）
+	return elevation, nil
+}
+
 // DisplayTokenAccount 显示Token账户信息
 func DisplayTokenAccount(token windows.Token) {
 	// windows.GetTokenInformation(token, windows.TokenStatistics, nil, 0, nil)
@@ -178,9 +209,10 @@ func DisplayTokenAccount(token windows.Token) {
 	windows.GetTokenInformation(token, windows.TokenOrigin, nil, 0, nil)
 }
 
+// FormatPrivilegeStatus 格式化权限状态
 type PrivilegeDetail struct {
-	Status string
-	Name   string
+	Status string //状态
+	Name   string //权限名称
 }
 
 // GetTokenAccountSIDs 获取Token账户SID列表
