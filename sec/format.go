@@ -43,8 +43,7 @@ func FormatSIDAttributes(label string, sidsAttr uint32) string {
 	if sidsAttr&windows.SE_GROUP_RESOURCE != 0 {
 		c7 = 'R'
 	}
-	// 格式化输出，与原C++代码保持一致的格式
-	return fmt.Sprintf("g:[%c%c%c%c%c%c%c] ", c1, c2, c3, c4, c5, c6, c7)
+	return fmt.Sprintf("g:[%c%c%c%c%c%c%c]", c1, c2, c3, c4, c5, c6, c7)
 }
 
 // 权限状态格式化
@@ -69,9 +68,7 @@ func FormatPrivilegeStatus(privAttr uint32) string {
 	if privAttr&windows.SE_PRIVILEGE_USED_FOR_ACCESS != 0 {
 		c4 = 'A'
 	}
-
-	// 格式化输出，与原C++代码保持一致的格式
-	return fmt.Sprintf("P:[%c%c%c%c]    ", c1, c2, c3, c4)
+	return fmt.Sprintf("P:[%c%c%c%c]", c1, c2, c3, c4)
 }
 
 func FormatJoinStatus(s advapi32.NETSETUP_JOIN_STATUS) string {
