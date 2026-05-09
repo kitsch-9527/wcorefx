@@ -34,3 +34,8 @@ Thumbs.db
 
 # Log files
 *.log
+
+# Tooling
+.agents/
+.claude/
+skills-lock.json

@@ -1,63 +1,115 @@
-﻿//go:build windows
-// +build windows
+//go:build windows
 
 package fs
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
+	"time"
 	"unsafe"
 
-	comm "github.com/kitsch-9527/wcorefx/common"
 	"golang.org/x/sys/windows"
 )
 
-// InfoType 表示文件资源信息的类型
+const maxPath = 260
+
+// InfoType 表示文件版本信息查询类型的字符串类型。
 type InfoType string
 
-// 文件信息类型常量定义，对应Windows资源信息中的标准字段
 const (
-	FileDescription  InfoType = "FileDescription"  // 文件描述信息
-	CompanyName      InfoType = "CompanyName"      // 公司名称
-	winapiName       InfoType = "winapiName"       // 内部名称
-	OriginalFileName InfoType = "OriginalFileName" // 原始文件名
-	LegalCopyright   InfoType = "LegalCopyright"   // 版权信息
-	ProductName      InfoType = "ProductName"      // 产品名称
-	ProductVersion   InfoType = "ProductVersion"   // 产品版本
+	// FileDescription 文件描述信息。
+	FileDescription  InfoType = "FileDescription"
+	// CompanyName 公司名称信息。
+	CompanyName      InfoType = "CompanyName"
+	// OriginalFileName 原始文件名信息。
+	OriginalFileName InfoType = "OriginalFileName"
+	// LegalCopyright 法律版权信息。
+	LegalCopyright   InfoType = "LegalCopyright"
+	// ProductName 产品名称信息。
+	ProductName      InfoType = "ProductName"
+	// ProductVersion 产品版本信息。
+	ProductVersion   InfoType = "ProductVersion"
 )
 
-// GetFileCreateTime 文件创建时间 返回时间戳
-func GetFileCreateTime(path string) (int64, error) {
-	var creationTime windows.Filetime
-	err := GetFileTime(path, &creationTime, nil, nil)
+// DirEntry 表示目录条目信息
+type DirEntry struct {
+	// Name 文件名（不含路径）
+	Name string
+	// Path 完整路径
+	Path string
+	// Size 文件大小（字节），目录为0
+	Size int64
+	// IsDir 是否为目录
+	IsDir bool
+	// ModTime 最后修改时间
+	ModTime time.Time
+}
+
+// ListDir 列出指定目录下的所有条目
+//   path - 目录路径
+//   返回 - 目录条目列表
+//   返回 - 错误信息
+func ListDir(path string) ([]DirEntry, error) {
+	entries, err := os.ReadDir(path)
 	if err != nil {
-		return 0, fmt.Errorf("GetFileTime failed: %w", err)
+		return nil, fmt.Errorf("read dir failed: %w", err)
+	}
+	result := make([]DirEntry, 0, len(entries))
+	for _, e := range entries {
+		info, err := e.Info()
+		if err != nil {
+			continue
+		}
+		result = append(result, DirEntry{
+			Name:    e.Name(),
+			Path:    filepath.Join(path, e.Name()),
+			Size:    info.Size(),
+			IsDir:   e.IsDir(),
+			ModTime: info.ModTime(),
+		})
+	}
+	return result, nil
+}
+
+// CreateTime 返回指定文件的创建时间戳（Unix 时间戳）。
+//   path - 目标文件路径。
+//   返回 - Unix 时间戳（秒），失败时返回错误。
+func CreateTime(path string) (int64, error) {
+	var creationTime windows.Filetime
+	err := getFileTime(path, &creationTime, nil, nil)
+	if err != nil {
+		return 0, fmt.Errorf("getFileTime failed: %w", err)
 	}
 	return creationTime.Nanoseconds() / 1e9, nil
 }
 
-// GetFileAccessTime 文件访问时间
-func GetFileAccessTime(path string) (int64, error) {
+// AccessTime 返回指定文件的最后访问时间戳（Unix 时间戳）。
+//   path - 目标文件路径。
+//   返回 - Unix 时间戳（秒），失败时返回错误。
+func AccessTime(path string) (int64, error) {
 	var lastAccessTime windows.Filetime
-	err := GetFileTime(path, nil, &lastAccessTime, nil)
+	err := getFileTime(path, nil, &lastAccessTime, nil)
 	if err != nil {
-		return 0, fmt.Errorf("GetFileTime failed: %w", err)
+		return 0, fmt.Errorf("getFileTime failed: %w", err)
 	}
 	return lastAccessTime.Nanoseconds() / 1e9, nil
 }
 
-// GetFileModifyTime 文件修改时间
-func GetFileModifyTime(path string) (int64, error) {
+// ModifyTime 返回指定文件的最后修改时间戳（Unix 时间戳）。
+//   path - 目标文件路径。
+//   返回 - Unix 时间戳（秒），失败时返回错误。
+func ModifyTime(path string) (int64, error) {
 	var lastWriteTime windows.Filetime
-	err := GetFileTime(path, nil, nil, &lastWriteTime)
+	err := getFileTime(path, nil, nil, &lastWriteTime)
 	if err != nil {
-		fmt.Errorf("GetFileTime failed: %w", err)
-		return 0, err
+		return 0, fmt.Errorf("getFileTime failed: %w", err)
 	}
 	return lastWriteTime.Nanoseconds() / 1e9, nil
 }
 
-// GetFileTime 获取文件的创建、访问、修改时间
-func GetFileTime(path string, creationTime, lastAccessTime, lastWriteTime *windows.Filetime) error {
+// getFileTime opens the file and retrieves its timestamps.
+func getFileTime(path string, creationTime, lastAccessTime, lastWriteTime *windows.Filetime) error {
 	handle, err := windows.CreateFile(
 		windows.StringToUTF16Ptr(path),
 		windows.GENERIC_READ,
@@ -71,24 +123,20 @@ func GetFileTime(path string, creationTime, lastAccessTime, lastWriteTime *windo
 		return fmt.Errorf("CreateFile failed: %w", err)
 	}
 	defer windows.CloseHandle(handle)
-	err = windows.GetFileTime(
-		handle,
-		creationTime,
-		lastAccessTime,
-		lastWriteTime,
-	)
+
+	err = windows.GetFileTime(handle, creationTime, lastAccessTime, lastWriteTime)
 	if err != nil {
 		return fmt.Errorf("GetFileTime failed: %w", err)
 	}
 	return nil
 }
 
-// GetFileInfo 获取文件指定类型的资源信息
-// path: 文件路径
-// infoType: 要获取的信息类型（如FileDescription、CompanyName等）
-// subTranslation: 可选的语言/代码页组合（格式为"HHHHHHHH"，如"040904B0"），为nil则自动获取
-// 返回值: 对应的信息字符串和可能的错误
-func GetFileInfo(path string, infoType InfoType, subTranslation *string) (string, error) {
+// Info 从文件中检索指定的版本信息字段。
+//   path           - 目标文件路径。
+//   infoType       - 要检索的版本信息类型（如 FileDescription、ProductName 等）。
+//   subTranslation - 可选的语言/代码页翻译字符串指针（nil 表示自动检测）。
+//   返回 - 查询到的版本信息字符串，失败时返回错误。
+func Info(path string, infoType InfoType, subTranslation *string) (string, error) {
 	versionInfo, err := getResourceVersionInfo(path)
 	if err != nil {
 		return "", fmt.Errorf("getResourceVersionInfo failed: %w", err)
@@ -96,23 +144,20 @@ func GetFileInfo(path string, infoType InfoType, subTranslation *string) (string
 	return getFileInfoByBlock(versionInfo, infoType, subTranslation)
 }
 
-// getFileInfoByBlock 从版本信息块中提取指定类型的信息
+// getFileInfoByBlock extracts version information from a version resource block.
 func getFileInfoByBlock(versionInfo []byte, infoType InfoType, subTranslation *string) (string, error) {
-	// LANGANDCODEPAGE 对应Windows API中的语言和代码页结构
-	type LANGANDCODEPAGE struct {
+	type langAndCodePage struct {
 		Language uint16
 		CodePage uint16
 	}
 
 	var (
-		translation *LANGANDCODEPAGE
+		translation *langAndCodePage
 		bufferSize  uint32
 		subBlock    string
 	)
 
-	// 当未指定子翻译时，自动获取系统默认的语言和代码页
 	if subTranslation == nil {
-		// 查询语言和代码页信息（对应Windows的Translation资源）
 		err := windows.VerQueryValue(
 			unsafe.Pointer(&versionInfo[0]),
 			"\\VarFileInfo\\Translation",
@@ -120,10 +165,8 @@ func getFileInfoByBlock(versionInfo []byte, infoType InfoType, subTranslation *s
 			&bufferSize,
 		)
 		if err != nil || translation == nil || bufferSize == 0 {
-			return "", fmt.Errorf("获取语言/代码页信息失败: %w", err)
+			return "", fmt.Errorf("failed to get language/codepage: %w", err)
 		}
-
-		// 构建查询路径，格式为\StringFileInfo\语言代码页\信息类型
 		subBlock = fmt.Sprintf(
 			"\\StringFileInfo\\%04X%04X\\%s",
 			translation.Language,
@@ -131,16 +174,13 @@ func getFileInfoByBlock(versionInfo []byte, infoType InfoType, subTranslation *s
 			infoType,
 		)
 	} else {
-		// 使用指定的语言/代码页组合
 		subBlock = fmt.Sprintf("\\StringFileInfo\\%s\\%s", *subTranslation, infoType)
 	}
 
-	// 检查路径长度是否超过系统限制
-	if len(subBlock) > comm.MAXPATH {
-		return "", fmt.Errorf("查询路径过长（最大%d字节）", comm.MAXPATH)
+	if len(subBlock) > maxPath {
+		return "", fmt.Errorf("query path too long (max %d bytes)", maxPath)
 	}
 
-	// 提取指定类型的具体信息
 	var infoBuf unsafe.Pointer
 	err := windows.VerQueryValue(
 		unsafe.Pointer(&versionInfo[0]),
@@ -149,20 +189,15 @@ func getFileInfoByBlock(versionInfo []byte, infoType InfoType, subTranslation *s
 		&bufferSize,
 	)
 	if err != nil || infoBuf == nil || bufferSize == 0 {
-		return "", fmt.Errorf("获取%s信息失败: %w", infoType, err)
+		return "", fmt.Errorf("failed to get %s info: %w", infoType, err)
 	}
 
-	// 将UTF-16编码的结果转换为Go字符串
 	return windows.UTF16PtrToString((*uint16)(infoBuf)), nil
 }
 
-// getResourceVersionInfo 获取文件的完整版本资源信息
-// path: 文件路径
-// 返回值: 版本信息字节数组和可能的错误
+// getResourceVersionInfo retrieves the raw version resource data for a file.
 func getResourceVersionInfo(path string) ([]byte, error) {
-	var zeroHandle = windows.Handle(0)
-
-	// 获取版本信息缓冲区大小
+	var zeroHandle windows.Handle
 	bufferSize, err := windows.GetFileVersionInfoSize(path, &zeroHandle)
 	if err != nil {
 		return nil, fmt.Errorf("GetFileVersionInfoSize failed: %w", err)
@@ -171,31 +206,23 @@ func getResourceVersionInfo(path string) ([]byte, error) {
 		return nil, fmt.Errorf("file has no version information")
 	}
 
-	// 申请缓冲区并读取版本信息
 	buffer := make([]byte, bufferSize)
-	err = windows.GetFileVersionInfo(
-		path,
-		0,
-		bufferSize,
-		unsafe.Pointer(&buffer[0]),
-	)
+	err = windows.GetFileVersionInfo(path, 0, bufferSize, unsafe.Pointer(&buffer[0]))
 	if err != nil {
 		return nil, fmt.Errorf("GetFileVersionInfo failed: %w", err)
 	}
-
 	return buffer, nil
 }
 
-// GetFileVersionInfo 获取文件的版本号（格式为major.minor.build.revision）
-// path: 文件路径
-// 返回值: 版本号字符串和可能的错误
-func GetFileVersionInfo(path string) (string, error) {
+// VersionInfo 返回文件的版本字符串（主版本.次版本.构建号.修订号）。
+//   path - 目标文件路径。
+//   返回 - 格式为 "major.minor.build.revision" 的版本字符串，失败时返回错误。
+func VersionInfo(path string) (string, error) {
 	versionInfo, err := getResourceVersionInfo(path)
 	if err != nil {
 		return "", fmt.Errorf("getResourceVersionInfo failed: %w", err)
 	}
 
-	// 解析固定版本信息结构
 	var fixedInfo *windows.VS_FIXEDFILEINFO
 	bufferSize := uint32(unsafe.Sizeof(*fixedInfo))
 	err = windows.VerQueryValue(
@@ -208,30 +235,10 @@ func GetFileVersionInfo(path string) (string, error) {
 		return "", fmt.Errorf("VerQueryValue failed: %w", err)
 	}
 
-	// 计算版本号各部分（高16位和低16位拆分）
 	major := fixedInfo.FileVersionMS >> 16
 	minor := fixedInfo.FileVersionMS & 0xFFFF
 	build := fixedInfo.FileVersionLS >> 16
 	revision := fixedInfo.FileVersionLS & 0xFFFF
 
 	return fmt.Sprintf("%d.%d.%d.%d", major, minor, build, revision), nil
-}
-
-// NativePathToDosPath 将 native 路径映射为标准盘符路径
-func NativePathToDosPath(nativePath string) (string, error) {
-	// 枚举所有盘符
-	for c := 'A'; c <= 'Z'; c++ {
-		dosDevice := fmt.Sprintf("%c:", c)
-		var target [comm.MAXPATH + 1]uint16
-		n, err := windows.QueryDosDevice(windows.StringToUTF16Ptr(dosDevice), &target[0], comm.MAXPATH)
-		if err != nil || n == 0 {
-			continue
-		}
-		devicePath := windows.UTF16ToString(target[:n])
-		if len(devicePath) > 0 && len(nativePath) > len(devicePath) && nativePath[:len(devicePath)] == devicePath {
-			// 替换为盘符路径
-			return fmt.Sprintf("%s%s", dosDevice, nativePath[len(devicePath):]), nil
-		}
-	}
-	return "", fmt.Errorf("did not find a matching dos device for native path: %s", nativePath)
 }

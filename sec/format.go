@@ -1,12 +1,15 @@
-﻿package sec
+package sec
 
 import (
 	"fmt"
 
-	"github.com/kitsch-9527/wcorefx/winapi/dll/advapi32"
 	"golang.org/x/sys/windows"
 )
 
+// FormatSIDAttributes 格式化 SID 属性标志为可读字符串。
+//   label    - SID 类型标签（如 "group"、"alias" 等），用于上下文标识。
+//   sidsAttr - SID 属性标志位组合。
+//   返回 - 格式化后的 SID 属性字符串，如 "g:[M DE   ]"。
 func FormatSIDAttributes(label string, sidsAttr uint32) string {
 	// 检查每个标志位并确定对应的字符
 	c1 := ' '
@@ -46,7 +49,9 @@ func FormatSIDAttributes(label string, sidsAttr uint32) string {
 	return fmt.Sprintf("g:[%c%c%c%c%c%c%c]", c1, c2, c3, c4, c5, c6, c7)
 }
 
-// 权限状态格式化
+// FormatPrivilegeStatus 格式化权限属性标志为可读字符串。
+//   privAttr - 权限属性标志位组合。
+//   返回 - 格式化后的权限状态字符串，如 "P:[ DE  ]"。
 func FormatPrivilegeStatus(privAttr uint32) string {
 	// 检查每个标志位并确定对应的字符
 	c1 := ' '
@@ -71,21 +76,20 @@ func FormatPrivilegeStatus(privAttr uint32) string {
 	return fmt.Sprintf("P:[%c%c%c%c]", c1, c2, c3, c4)
 }
 
-func FormatJoinStatus(s advapi32.NETSETUP_JOIN_STATUS) string {
+// FormatJoinStatus 格式化域加入状态为可读字符串。
+//   s - 要格式化的域加入状态枚举值。
+//   返回 - 对应的可读状态描述字符串。
+func FormatJoinStatus(s NETSETUP_JOIN_STATUS) string {
 	switch s {
-	case advapi32.NetSetupUnknownStatus:
+	case NetSetupUnknownStatus:
 		return "NetSetupUnknownStatus"
-		//return "未知状态"
-	case advapi32.NetSetupUnjoined:
+	case NetSetupUnjoined:
 		return "NetSetupUnjoined"
-		//return "未加入域或工作组"
-	case advapi32.NetSetupWorkgroupName:
+	case NetSetupWorkgroupName:
 		return "NetSetupWorkgroupName"
-		//return "已加入工作组"
-	case advapi32.NetSetupDomainName:
+	case NetSetupDomainName:
 		return "NetSetupDomainName"
-		//return "已加入域"
 	default:
-		return fmt.Sprintf("NETSETUP_JOIN_STATUS(%d)", s) // 未知值时返回原始数字
+		return fmt.Sprintf("NETSETUP_JOIN_STATUS(%d)", s)
 	}
 }
