@@ -253,6 +253,49 @@ func TestEnviron(t *testing.T) {
 	t.Logf("Environ() returned %d variables", len(env))
 }
 
+func TestMemory(t *testing.T) {
+	mi, err := Memory()
+	if err != nil {
+		t.Fatalf("Memory() failed: %v", err)
+	}
+	if mi.TotalPhysical == 0 {
+		t.Error("TotalPhysical = 0, expected > 0")
+	}
+	if mi.AvailablePhysical > mi.TotalPhysical {
+		t.Errorf("AvailablePhysical (%d) > TotalPhysical (%d)", mi.AvailablePhysical, mi.TotalPhysical)
+	}
+	if mi.UsedPhysical > mi.TotalPhysical {
+		t.Errorf("UsedPhysical (%d) > TotalPhysical (%d)", mi.UsedPhysical, mi.TotalPhysical)
+	}
+	t.Logf("Memory: total=%d MB, avail=%d MB, used=%d MB, load=%d%%",
+		mi.TotalPhysical>>20, mi.AvailablePhysical>>20, mi.UsedPhysical>>20, mi.MemoryLoad)
+}
+
+func TestCPUModel(t *testing.T) {
+	model, err := CPUModel()
+	if err != nil {
+		t.Fatalf("CPUModel() failed: %v", err)
+	}
+	if model == "" {
+		t.Error("CPUModel() returned empty string")
+	}
+	t.Logf("CPUModel() = %s", model)
+}
+
+func TestDrives(t *testing.T) {
+	drives, err := Drives()
+	if err != nil {
+		t.Fatalf("Drives() failed: %v", err)
+	}
+	if len(drives) == 0 {
+		t.Error("Drives() returned empty list, expected at least one drive")
+	}
+	for _, d := range drives {
+		t.Logf("Drive: %s  Type: %s  Total: %d MB  Free: %d MB",
+			d.Drive, d.Type, d.TotalBytes>>20, d.FreeBytes>>20)
+	}
+}
+
 func TestDosErrorMsg(t *testing.T) {
 	tests := []struct {
 		code  uint32

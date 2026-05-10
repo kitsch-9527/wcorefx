@@ -55,6 +55,9 @@ import "github.com/kitsch-9527/wcorefx/os"
 | `Syswow64Dir()` | 返回 SysWOW64 目录 |
 | `Getenv(name)` | 返回环境变量值（支持 %PATH% 展开） |
 | `Environ()` | 返回全部环境变量（map[string]string） |
+| `CPUModel()` | 返回 CPU 型号名称（如 "Intel(R) Core(TM) i7-10700K CPU @ 3.80GHz"） |
+| `Memory()` | 返回系统物理内存和虚拟内存信息（`MemoryInfo`：总量/可用/已用/使用率） |
+| `Drives()` | 返回所有逻辑驱动器信息（`DriveInfo`：盘符/类型/总空间/可用空间） |
 | `DosErrorMsg(code)` | 返回 Windows 错误码对应的描述文本 |
 | `Reboot()` | 重启系统（需 SE_SHUTDOWN_NAME 权限） |
 | `Poweroff()` | 关闭系统（需 SE_SHUTDOWN_NAME 权限） |
