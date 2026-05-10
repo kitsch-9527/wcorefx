@@ -214,6 +214,78 @@ func getResourceVersionInfo(path string) ([]byte, error) {
 	return buffer, nil
 }
 
+// VolumeInfo 表示逻辑卷信息
+type VolumeInfo struct {
+	// Name 卷名（如 C:\）
+	Name string
+	// Label 卷标
+	Label string
+	// Type 文件系统类型（NTFS, FAT32 等）
+	Type string
+	// TotalSize 总大小（字节）
+	TotalSize uint64
+	// FreeSize 可用大小（字节）
+	FreeSize uint64
+}
+
+// Volumes 返回所有逻辑卷信息
+//	 返回 - 逻辑卷信息列表
+//	 返回 - 错误信息
+func Volumes() ([]VolumeInfo, error) {
+	drives, err := windows.GetLogicalDrives()
+	if err != nil {
+		return nil, fmt.Errorf("GetLogicalDrives failed: %w", err)
+	}
+
+	var vols []VolumeInfo
+	for i := 0; i < 26; i++ {
+		if drives&(1<<i) == 0 {
+			continue
+		}
+		root := string(rune('A'+i)) + ":\\"
+		info, err := queryVolume(root)
+		if err != nil {
+			continue
+		}
+		vols = append(vols, info)
+	}
+	return vols, nil
+}
+
+// queryVolume queries information for a specific volume root path.
+func queryVolume(root string) (VolumeInfo, error) {
+	rootPtr := windows.StringToUTF16Ptr(root)
+
+	var nameBuf [256]uint16
+	var fsBuf [128]uint16
+	var serial, maxComp uint32
+	var flags uint32
+
+	err := windows.GetVolumeInformation(
+		rootPtr,
+		&nameBuf[0], uint32(len(nameBuf)),
+		&serial, &maxComp, &flags,
+		&fsBuf[0], uint32(len(fsBuf)),
+	)
+	if err != nil {
+		return VolumeInfo{}, err
+	}
+
+	var freeBytesAvailable, totalBytes, totalFreeBytes uint64
+	err = windows.GetDiskFreeSpaceEx(rootPtr, &freeBytesAvailable, &totalBytes, &totalFreeBytes)
+	if err != nil {
+		return VolumeInfo{}, err
+	}
+
+	return VolumeInfo{
+		Name:      root,
+		Label:     windows.UTF16ToString(nameBuf[:]),
+		Type:      windows.UTF16ToString(fsBuf[:]),
+		TotalSize: totalBytes,
+		FreeSize:  totalFreeBytes,
+	}, nil
+}
+
 // VersionInfo 返回文件的版本字符串（主版本.次版本.构建号.修订号）。
 //   path - 目标文件路径。
 //   返回 - 格式为 "major.minor.build.revision" 的版本字符串，失败时返回错误。

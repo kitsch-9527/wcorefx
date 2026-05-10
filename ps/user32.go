@@ -1,0 +1,66 @@
+//go:build windows
+
+package ps
+
+import (
+	"fmt"
+	"syscall"
+	"unsafe"
+
+	"golang.org/x/sys/windows"
+)
+
+var moduser32 = windows.NewLazySystemDLL("user32.dll")
+
+var (
+	procEnumWindows     = moduser32.NewProc("EnumWindows")
+	procGetWindowTextW  = moduser32.NewProc("GetWindowTextW")
+	procGetClassNameW   = moduser32.NewProc("GetClassNameW")
+	procIsWindowVisible = moduser32.NewProc("IsWindowVisible")
+)
+
+// WindowInfo 表示窗口信息
+type WindowInfo struct {
+	// HWND 窗口句柄
+	HWND uintptr
+	// Title 窗口标题
+	Title string
+	// ClassName 窗口类名
+	ClassName string
+	// Visible 是否可见
+	Visible bool
+}
+
+// Windows 返回所有顶层窗口列表
+//   返回 - 窗口信息列表
+//   返回 - 错误信息
+func Windows() ([]WindowInfo, error) {
+	var wins []WindowInfo
+	cb := syscall.NewCallback(func(hwnd uintptr, lparam uintptr) uintptr {
+		var buf [512]uint16
+		var classBuf [256]uint16
+
+		procGetWindowTextW.Call(hwnd, uintptr(unsafe.Pointer(&buf[0])), uintptr(len(buf)))
+		title := windows.UTF16ToString(buf[:])
+
+		procGetClassNameW.Call(hwnd, uintptr(unsafe.Pointer(&classBuf[0])), uintptr(len(classBuf)))
+		className := windows.UTF16ToString(classBuf[:])
+
+		visible, _, _ := procIsWindowVisible.Call(hwnd)
+
+		wins = append(wins, WindowInfo{
+			HWND:      hwnd,
+			Title:     title,
+			ClassName: className,
+			Visible:   visible != 0,
+		})
+		return 1
+	})
+
+	r1, _, _ := syscall.SyscallN(procEnumWindows.Addr(), cb, 0)
+	if r1 == 0 {
+		return nil, fmt.Errorf("EnumWindows failed")
+	}
+
+	return wins, nil
+}

@@ -12,8 +12,12 @@ import (
 var modiphlpapi = windows.NewLazySystemDLL("iphlpapi.dll")
 
 var (
-	procGetExtendedTcpTable = modiphlpapi.NewProc("GetExtendedTcpTable")
-	procGetExtendedUdpTable = modiphlpapi.NewProc("GetExtendedUdpTable")
+	procGetExtendedTcpTable   = modiphlpapi.NewProc("GetExtendedTcpTable")
+	procGetExtendedUdpTable   = modiphlpapi.NewProc("GetExtendedUdpTable")
+	procGetAdaptersAddresses  = modiphlpapi.NewProc("GetAdaptersAddresses")
+	procGetIpNetTable2        = modiphlpapi.NewProc("GetIpNetTable2")
+	procGetIpForwardTable2    = modiphlpapi.NewProc("GetIpForwardTable2")
+	procFreeMibTable          = modiphlpapi.NewProc("FreeMibTable")
 )
 
 func getExtendedTcpTable(table *byte, size *uint32, sort bool, af, tableClass, reserved uint32) error {
@@ -52,4 +56,8 @@ func getExtendedUdpTable(table *byte, size *uint32, sort bool, af, tableClass, r
 		return syscall.Errno(r1)
 	}
 	return nil
+}
+
+func freeMibTable(table unsafe.Pointer) {
+	syscall.SyscallN(procFreeMibTable.Addr(), uintptr(table))
 }

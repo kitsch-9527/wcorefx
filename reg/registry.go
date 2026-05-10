@@ -167,6 +167,90 @@ func EnumSubKeys(p string) ([]string, error) {
 	return names, nil
 }
 
+// SetString 设置注册表字符串值 (REG_SZ)。
+//   path  - 完整的注册表路径（如 HKLM\Software\MyKey）
+//   key   - 值名称
+//   value - 要设置的字符串值
+//   返回 - 错误信息
+func SetString(path, key, value string) error {
+	rootKey, subPath, err := parsePath(path)
+	if err != nil {
+		return err
+	}
+	k, err := registry.OpenKey(rootKey, subPath, registry.SET_VALUE)
+	if err != nil {
+		return fmt.Errorf("open key failed: %w", err)
+	}
+	defer k.Close()
+	return k.SetStringValue(key, value)
+}
+
+// SetDWORD 设置注册表 DWORD 值 (REG_DWORD)。
+//   path  - 完整的注册表路径
+//   key   - 值名称
+//   value - 要设置的 DWORD 值
+//   返回 - 错误信息
+func SetDWORD(path, key string, value uint32) error {
+	rootKey, subPath, err := parsePath(path)
+	if err != nil {
+		return err
+	}
+	k, err := registry.OpenKey(rootKey, subPath, registry.SET_VALUE)
+	if err != nil {
+		return fmt.Errorf("open key failed: %w", err)
+	}
+	defer k.Close()
+	return k.SetDWordValue(key, value)
+}
+
+// CreateKey 创建注册表键。
+//   path - 完整的注册表路径
+//   返回 - 错误信息
+func CreateKey(path string) error {
+	rootKey, subPath, err := parsePath(path)
+	if err != nil {
+		return err
+	}
+	k, _, err := registry.CreateKey(rootKey, subPath, registry.SET_VALUE)
+	if err != nil {
+		return fmt.Errorf("create key failed: %w", err)
+	}
+	k.Close()
+	return nil
+}
+
+// DeleteKey 删除注册表键及其所有子键。
+//   path - 完整的注册表路径
+//   返回 - 错误信息
+func DeleteKey(path string) error {
+	rootKey, subPath, err := parsePath(path)
+	if err != nil {
+		return err
+	}
+	err = registry.DeleteKey(rootKey, subPath)
+	if err != nil {
+		return fmt.Errorf("delete key failed: %w", err)
+	}
+	return nil
+}
+
+// DeleteValue 删除注册表值。
+//   path - 完整的注册表路径
+//   key  - 要删除的值名称
+//   返回 - 错误信息
+func DeleteValue(path, key string) error {
+	rootKey, subPath, err := parsePath(path)
+	if err != nil {
+		return err
+	}
+	k, err := registry.OpenKey(rootKey, subPath, registry.SET_VALUE)
+	if err != nil {
+		return fmt.Errorf("open key failed: %w", err)
+	}
+	defer k.Close()
+	return k.DeleteValue(key)
+}
+
 // typeName 将注册表值类型转换为字符串表示
 func typeName(t uint32) string {
 	switch t {
