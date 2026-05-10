@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net"
 	"reflect"
+	"syscall"
 	"unsafe"
 
 	"golang.org/x/sys/windows"
@@ -68,6 +69,44 @@ type MIB_UDP6ROW_OWNER_PID struct {
 	LocalPort    uint32
 	// DwOwningPid 拥有进程的 PID。
 	DwOwningPid  uint32
+}
+
+// InterfaceInfo 表示网络接口信息。
+type InterfaceInfo struct {
+	// Name 接口名称。
+	Name        string
+	// Description 接口描述。
+	Description string
+	// IP 接口 IP 地址。
+	IP          string
+	// MAC 接口 MAC 地址。
+	MAC         []byte
+	// IsUp 接口是否启用。
+	IsUp        bool
+	// Speed 接口速度（bps）。
+	Speed       uint64
+}
+
+// ARPEntry 表示 ARP 表条目。
+type ARPEntry struct {
+	// IP 目标 IP 地址。
+	IP      string
+	// MAC MAC 地址。
+	MAC     []byte
+	// IfIndex 接口索引。
+	IfIndex uint32
+}
+
+// RouteEntry 表示路由表条目。
+type RouteEntry struct {
+	// Destination 目标网络。
+	Destination string
+	// NextHop 下一跳。
+	NextHop     string
+	// IfIndex 接口索引。
+	IfIndex     uint32
+	// Metric 路由度量。
+	Metric      uint32
 }
 
 const (
@@ -456,4 +495,207 @@ func WfpFilters() ([]FwpmFilter, error) {
 		})
 	}
 	return result, nil
+}
+
+// Interfaces 返回所有网络接口信息。
+//   返回1 - 网络接口信息列表
+//   返回2 - 错误信息
+func Interfaces() ([]InterfaceInfo, error) {
+	var bufSize uint32
+	// First call to get required buffer size (expect ERROR_BUFFER_OVERFLOW)
+	r1, _, _ := syscall.SyscallN(procGetAdaptersAddresses.Addr(),
+		uintptr(windows.AF_UNSPEC),
+		uintptr(0x0010), // GAA_FLAG_INCLUDE_PREFIX
+		0,
+		0,
+		uintptr(unsafe.Pointer(&bufSize)),
+	)
+	if r1 != 0 && syscall.Errno(r1) != windows.ERROR_BUFFER_OVERFLOW {
+		return nil, fmt.Errorf("GetAdaptersAddresses size query: %w", syscall.Errno(r1))
+	}
+	if bufSize == 0 {
+		return nil, fmt.Errorf("GetAdaptersAddresses returned buffer size 0")
+	}
+
+	buf := make([]byte, bufSize)
+	r1, _, _ = syscall.SyscallN(procGetAdaptersAddresses.Addr(),
+		uintptr(windows.AF_UNSPEC),
+		uintptr(0x0010),
+		0,
+		uintptr(unsafe.Pointer(&buf[0])),
+		uintptr(unsafe.Pointer(&bufSize)),
+	)
+	if r1 != 0 {
+		return nil, fmt.Errorf("GetAdaptersAddresses failed: %w", syscall.Errno(r1))
+	}
+
+	var ifaces []InterfaceInfo
+	p := (*windows.IpAdapterAddresses)(unsafe.Pointer(&buf[0]))
+	for p != nil {
+		info := InterfaceInfo{
+			Name:  windows.UTF16PtrToString(p.FriendlyName),
+			IsUp:  p.OperStatus == 1, // IfOperStatusUp
+			Speed: p.TransmitLinkSpeed,
+		}
+		if p.Description != nil {
+			info.Description = windows.UTF16PtrToString(p.Description)
+		}
+		// Extract IP from first unicast address
+		if p.FirstUnicastAddress != nil {
+			sa := p.FirstUnicastAddress.Address.Sockaddr
+			if sa != nil {
+				family := *(*uint16)(unsafe.Pointer(sa))
+				if family == windows.AF_INET {
+					sa4 := (*windows.RawSockaddrInet4)(unsafe.Pointer(sa))
+					info.IP = net.IP(sa4.Addr[:]).String()
+				} else if family == windows.AF_INET6 {
+					sa6 := (*windows.RawSockaddrInet6)(unsafe.Pointer(sa))
+					info.IP = net.IP(sa6.Addr[:]).String()
+				}
+			}
+		}
+		// Copy MAC address
+		if p.PhysicalAddressLength > 0 {
+			info.MAC = make([]byte, p.PhysicalAddressLength)
+			copy(info.MAC, p.PhysicalAddress[:p.PhysicalAddressLength])
+		}
+		ifaces = append(ifaces, info)
+		p = p.Next
+	}
+	return ifaces, nil
+}
+
+// ARP 返回 ARP 表条目。
+//   返回1 - ARP 表条目列表
+//   返回2 - 错误信息
+func ARP() ([]ARPEntry, error) {
+	var table unsafe.Pointer
+	r1, _, _ := syscall.SyscallN(procGetIpNetTable2.Addr(),
+		uintptr(windows.AF_UNSPEC),
+		uintptr(unsafe.Pointer(&table)),
+		0,
+	)
+	if r1 != 0 {
+		return nil, fmt.Errorf("GetIpNetTable2 failed: %w", syscall.Errno(r1))
+	}
+	defer freeMibTable(table)
+
+	// MIB_IPNET_ROW2 layout from netioapi.h:
+	// Address(SOCKADDR_INET=28) + InterfaceIndex(4) + InterfaceLuid(8) +
+	// PhysicalAddress[IF_MAX_PHYS_ADDRESS_LENGTH=32] + PhysicalAddressLen(4) +
+	// State(4) + Flags(1+pad3=4) + ReachabilityTime(4) = 88 bytes
+	type mibIpNetRow2 struct {
+		Address            [28]byte
+		InterfaceIndex     uint32
+		InterfaceLUID      uint64
+		PhysicalAddress    [32]byte  // IF_MAX_PHYS_ADDRESS_LENGTH = 32
+		PhysicalAddressLen uint32
+		State              uint32
+		_                  [8]byte   // trailing union fields
+	}
+
+	numEntries := *(*uint32)(table)
+	rowSize := unsafe.Sizeof(mibIpNetRow2{})
+	firstRow := unsafe.Pointer(uintptr(table) + 8)
+
+	entries := make([]ARPEntry, 0, numEntries)
+	for i := uint32(0); i < numEntries; i++ {
+		r := *(*mibIpNetRow2)(unsafe.Pointer(uintptr(firstRow) + rowSize*uintptr(i)))
+
+		macLen := r.PhysicalAddressLen
+		if macLen > 32 {
+			macLen = 32
+		}
+		mac := make([]byte, macLen)
+		copy(mac, r.PhysicalAddress[:macLen])
+
+		var ip string
+		family := *(*uint16)(unsafe.Pointer(&r.Address[0]))
+		if family == windows.AF_INET {
+			ip = net.IP(r.Address[4:8]).String()
+		} else if family == windows.AF_INET6 {
+			ip = net.IP(r.Address[8:24]).String()
+		}
+
+		entries = append(entries, ARPEntry{
+			IP:      ip,
+			MAC:     mac,
+			IfIndex: r.InterfaceIndex,
+		})
+	}
+	return entries, nil
+}
+
+// Route 返回路由表条目。
+//   返回1 - 路由表条目列表
+//   返回2 - 错误信息
+func Route() ([]RouteEntry, error) {
+	var table unsafe.Pointer
+	r1, _, _ := syscall.SyscallN(procGetIpForwardTable2.Addr(),
+		uintptr(windows.AF_UNSPEC),
+		uintptr(unsafe.Pointer(&table)),
+	)
+	if r1 != 0 {
+		return nil, fmt.Errorf("GetIpForwardTable2 failed: %w", syscall.Errno(r1))
+	}
+	defer freeMibTable(table)
+
+	// MIB_IPFORWARD_ROW2 layout from netioapi.h:
+	// InterfaceLuid(8) + InterfaceIndex(4) + DestinationPrefix(IP_ADDRESS_PREFIX=32) +
+	// NextHop(SOCKADDR_INET=28) + SitePrefixLength(1+pad3=4) +
+	// ValidLifetime(4) + PreferredLifetime(4) + Metric(4) +
+	// remaining fields(16) = 104 bytes
+	type mibIpForwardRow2 struct {
+		InterfaceLUID     uint64    // offset 0
+		InterfaceIndex    uint32    // offset 8
+		DestinationPrefix [32]byte  // offset 12: IP_ADDRESS_PREFIX = SOCKADDR_INET(28) + PrefixLength(1) + pad(3)
+		NextHop           [28]byte  // offset 44: SOCKADDR_INET
+		SitePrefixLength  uint8     // offset 72
+		_                 [3]byte   // offset 73: padding
+		ValidLifetime     uint32    // offset 76
+		PreferredLifetime uint32    // offset 80
+		Metric            uint32    // offset 84
+		_                 [16]byte  // offset 88: remaining fields (Protocol, Loopback, AutoconfigureAddress, Publish, Immortal, Age, Origin)
+	}
+
+	numEntries := *(*uint32)(table)
+	rowSize := unsafe.Sizeof(mibIpForwardRow2{})
+	firstRow := unsafe.Pointer(uintptr(table) + 8)
+
+	entries := make([]RouteEntry, 0, numEntries)
+	for i := uint32(0); i < numEntries; i++ {
+		r := *(*mibIpForwardRow2)(unsafe.Pointer(uintptr(firstRow) + rowSize*uintptr(i)))
+
+		// DestinationPrefix is IP_ADDRESS_PREFIX: SOCKADDR_INET(28) + PrefixLength(1) + pad(3)
+		destFamily := *(*uint16)(unsafe.Pointer(&r.DestinationPrefix[0]))
+		var destIP string
+		if destFamily == windows.AF_INET {
+			destIP = net.IP(r.DestinationPrefix[4:8]).String()
+		} else if destFamily == windows.AF_INET6 {
+			destIP = net.IP(r.DestinationPrefix[8:24]).String()
+		}
+		prefixLen := r.DestinationPrefix[28]
+
+		// NextHop is SOCKADDR_INET
+		nextHopFamily := *(*uint16)(unsafe.Pointer(&r.NextHop[0]))
+		var nextHopIP string
+		if nextHopFamily == windows.AF_INET {
+			nextHopIP = net.IP(r.NextHop[4:8]).String()
+		} else if nextHopFamily == windows.AF_INET6 {
+			nextHopIP = net.IP(r.NextHop[8:24]).String()
+		}
+
+		dest := destIP
+		if prefixLen > 0 {
+			dest = fmt.Sprintf("%s/%d", destIP, prefixLen)
+		}
+
+		entries = append(entries, RouteEntry{
+			Destination: dest,
+			NextHop:     nextHopIP,
+			IfIndex:     r.InterfaceIndex,
+			Metric:      r.Metric,
+		})
+	}
+	return entries, nil
 }

@@ -165,3 +165,33 @@ func TestOpenToken(t *testing.T) {
 	}
 	token.Close()
 }
+
+func TestThreads(t *testing.T) {
+	threads, err := Threads(uint32(os.Getpid()))
+	if err != nil {
+		t.Fatalf("Threads() failed: %v", err)
+	}
+	if len(threads) == 0 {
+		t.Fatal("Threads() returned empty slice for current process")
+	}
+	t.Logf("Current process has %d threads", len(threads))
+	for _, th := range threads {
+		if th.ID == 0 {
+			t.Error("Threads() returned thread with ID=0")
+		}
+	}
+}
+
+func TestWindows(t *testing.T) {
+	wins, err := Windows()
+	if err != nil {
+		t.Fatalf("Windows() failed: %v", err)
+	}
+	t.Logf("Found %d top-level windows", len(wins))
+	for _, w := range wins {
+		if w.Title != "" {
+			t.Logf("  Window: %q class=%q", w.Title, w.ClassName)
+			break
+		}
+	}
+}

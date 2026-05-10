@@ -106,3 +106,36 @@ func TestInetNtoa6(t *testing.T) {
 	}
 	t.Logf("IPv6 addr: %s", s)
 }
+
+func TestInterfaces(t *testing.T) {
+	ifaces, err := Interfaces()
+	if err != nil {
+		t.Fatalf("Interfaces() failed: %v", err)
+	}
+	if len(ifaces) == 0 {
+		t.Fatal("Interfaces() returned empty slice")
+	}
+	t.Logf("Found %d network interfaces", len(ifaces))
+	for _, iface := range ifaces {
+		if iface.Name != "" {
+			t.Logf("  %s: %s, IP=%s, MAC=%X", iface.Name, iface.Description, iface.IP, iface.MAC)
+			break
+		}
+	}
+}
+
+func TestARP(t *testing.T) {
+	entries, err := ARP()
+	if err != nil {
+		t.Fatalf("ARP() failed: %v", err)
+	}
+	t.Logf("Found %d ARP entries", len(entries))
+}
+
+func TestRoute(t *testing.T) {
+	entries, err := Route()
+	if err != nil {
+		t.Fatalf("Route() failed: %v", err)
+	}
+	t.Logf("Found %d route entries", len(entries))
+}

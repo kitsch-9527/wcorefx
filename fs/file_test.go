@@ -260,6 +260,24 @@ func TestListDir_InvalidPath(t *testing.T) {
 	}
 }
 
+func TestVolumes(t *testing.T) {
+	vols, err := Volumes()
+	if err != nil {
+		t.Fatalf("Volumes() failed: %v", err)
+	}
+	if len(vols) == 0 {
+		t.Fatal("Volumes() returned empty slice")
+	}
+	t.Logf("Found %d volumes", len(vols))
+	for _, v := range vols {
+		if v.Name != "" {
+			t.Logf("  %s (%s) type=%s total=%d free=%d",
+				v.Name, v.Label, v.Type, v.TotalSize, v.FreeSize)
+			break
+		}
+	}
+}
+
 func TestExample(t *testing.T) {
 	// Example: retrieving timestamps and version info for a system DLL.
 	path := versionFile

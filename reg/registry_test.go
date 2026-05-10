@@ -4,6 +4,8 @@ package reg
 
 import (
 	"testing"
+
+	"golang.org/x/sys/windows/registry"
 )
 
 func TestCheckPath_ValidPath(t *testing.T) {
@@ -117,5 +119,98 @@ func TestEnumSubKeys_InvalidPath(t *testing.T) {
 	_, err := EnumSubKeys(``)
 	if err == nil {
 		t.Errorf("EnumSubKeys() expected error for invalid path")
+	}
+}
+
+func TestSetString_RoundTrip(t *testing.T) {
+	// Use a test key under HKCU\Software to avoid system impact
+	testPath := `HKCU\Software\wcorefx_test`
+	defer registry.DeleteKey(registry.CURRENT_USER, `Software\wcorefx_test`)
+
+	// Create the key first before setting values
+	if err := CreateKey(testPath); err != nil {
+		t.Fatalf("CreateKey() error = %v", err)
+	}
+
+	err := SetString(testPath, "TestValue", "hello")
+	if err != nil {
+		t.Fatalf("SetString() error = %v", err)
+	}
+
+	got, err := GetValue(testPath, "TestValue")
+	if err != nil {
+		t.Fatalf("GetValue() error = %v", err)
+	}
+	if got != "hello" {
+		t.Errorf("GetValue() = %q, want %q", got, "hello")
+	}
+}
+
+func TestSetDWORD_RoundTrip(t *testing.T) {
+	testPath := `HKCU\Software\wcorefx_test`
+	defer registry.DeleteKey(registry.CURRENT_USER, `Software\wcorefx_test`)
+
+	// Create the key first before setting values
+	if err := CreateKey(testPath); err != nil {
+		t.Fatalf("CreateKey() error = %v", err)
+	}
+
+	err := SetDWORD(testPath, "TestDWORD", 42)
+	if err != nil {
+		t.Fatalf("SetDWORD() error = %v", err)
+	}
+	// Read back using raw registry API to verify
+	k, err := registry.OpenKey(registry.CURRENT_USER, `Software\wcorefx_test`, registry.QUERY_VALUE)
+	if err != nil {
+		t.Fatalf("OpenKey error = %v", err)
+	}
+	defer k.Close()
+	val, _, err := k.GetIntegerValue("TestDWORD")
+	if err != nil {
+		t.Fatalf("GetIntegerValue error = %v", err)
+	}
+	if val != 42 {
+		t.Errorf("value = %d, want 42", val)
+	}
+}
+
+func TestCreateKey_ThenCheckPath(t *testing.T) {
+	testPath := `HKCU\Software\wcorefx_test_create`
+	defer registry.DeleteKey(registry.CURRENT_USER, `Software\wcorefx_test_create`)
+
+	err := CreateKey(testPath)
+	if err != nil {
+		t.Fatalf("CreateKey() error = %v", err)
+	}
+	if !CheckPath(testPath) {
+		t.Error("CheckPath() = false after CreateKey")
+	}
+}
+
+func TestDeleteValue_RoundTrip(t *testing.T) {
+	testPath := `HKCU\Software\wcorefx_test`
+	defer registry.DeleteKey(registry.CURRENT_USER, `Software\wcorefx_test`)
+
+	// Create the key first before setting values
+	if err := CreateKey(testPath); err != nil {
+		t.Fatalf("CreateKey() error = %v", err)
+	}
+
+	if err := SetString(testPath, "ToDelete", "value"); err != nil {
+		t.Fatalf("SetString() error = %v", err)
+	}
+	err := DeleteValue(testPath, "ToDelete")
+	if err != nil {
+		t.Fatalf("DeleteValue() error = %v", err)
+	}
+	// The key still exists, but the value should be gone
+	vals, err := EnumValues(testPath)
+	if err != nil {
+		t.Fatalf("EnumValues() error = %v", err)
+	}
+	for _, v := range vals {
+		if v.Name == "ToDelete" {
+			t.Error("DeleteValue() did not remove the value")
+		}
 	}
 }

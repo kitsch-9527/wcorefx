@@ -89,3 +89,36 @@ func TestDriverNameKnownDriver(t *testing.T) {
 		t.Log("ntoskrnl.exe not found in driver list (this is unusual)")
 	}
 }
+
+func TestKernelModules(t *testing.T) {
+	modules, err := KernelModules()
+	if err != nil {
+		t.Fatalf("KernelModules() failed: %v", err)
+	}
+	if len(modules) == 0 {
+		t.Fatal("KernelModules() returned empty slice")
+	}
+	t.Logf("Found %d kernel modules", len(modules))
+}
+
+func TestObjectDirectory(t *testing.T) {
+	entries, err := ObjectDirectory(`\GLOBAL??`)
+	if err != nil {
+		t.Fatalf("ObjectDirectory(\\GLOBAL??) failed: %v", err)
+	}
+	if len(entries) == 0 {
+		t.Fatal("ObjectDirectory(\\GLOBAL??) returned empty slice")
+	}
+	t.Logf("Found %d objects in \\GLOBAL??", len(entries))
+}
+
+func TestDevices(t *testing.T) {
+	devs, err := Devices()
+	if err != nil {
+		t.Fatalf("Devices() failed: %v", err)
+	}
+	if len(devs) == 0 {
+		t.Fatal("Devices() returned empty slice")
+	}
+	t.Logf("Found %d device objects", len(devs))
+}
