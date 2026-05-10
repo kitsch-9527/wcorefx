@@ -3,6 +3,7 @@
 package os
 
 import (
+	"fmt"
 	"unsafe"
 
 	"golang.org/x/sys/windows"
@@ -11,8 +12,9 @@ import (
 var modkernel32 = windows.NewLazySystemDLL("kernel32.dll")
 
 var (
-	procGetSystemInfo  = modkernel32.NewProc("GetNativeSystemInfo")
-	procGetTickCount64 = modkernel32.NewProc("GetTickCount64")
+	procGetSystemInfo         = modkernel32.NewProc("GetNativeSystemInfo")
+	procGetTickCount64        = modkernel32.NewProc("GetTickCount64")
+	procGlobalMemoryStatusEx  = modkernel32.NewProc("GlobalMemoryStatusEx")
 )
 
 type SYSTEM_INFO struct {
@@ -29,6 +31,19 @@ type SYSTEM_INFO struct {
 	wProcessorRevision          uint16
 }
 
+// MEMORYSTATUSEX maps to Windows MEMORYSTATUSEX structure.
+type MEMORYSTATUSEX struct {
+	dwLength                uint32
+	dwMemoryLoad            uint32
+	ullTotalPhys            uint64
+	ullAvailPhys            uint64
+	ullTotalPageFile        uint64
+	ullAvailPageFile        uint64
+	ullTotalVirtual         uint64
+	ullAvailVirtual         uint64
+	ullAvailExtendedVirtual uint64
+}
+
 func getNativeSystemInfo() SYSTEM_INFO {
 	var info SYSTEM_INFO
 	procGetSystemInfo.Call(uintptr(unsafe.Pointer(&info)))
@@ -38,4 +53,14 @@ func getNativeSystemInfo() SYSTEM_INFO {
 func getTickCount64() uint64 {
 	ret, _, _ := procGetTickCount64.Call()
 	return uint64(ret)
+}
+
+func globalMemoryStatusEx() (MEMORYSTATUSEX, error) {
+	var ms MEMORYSTATUSEX
+	ms.dwLength = uint32(unsafe.Sizeof(ms))
+	ret, _, _ := procGlobalMemoryStatusEx.Call(uintptr(unsafe.Pointer(&ms)))
+	if ret == 0 {
+		return ms, fmt.Errorf("GlobalMemoryStatusEx failed")
+	}
+	return ms, nil
 }

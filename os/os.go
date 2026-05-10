@@ -11,7 +11,38 @@ import (
 	"unsafe"
 
 	"golang.org/x/sys/windows"
+	"golang.org/x/sys/windows/registry"
 )
+
+// MemoryInfo 保存系统内存信息
+type MemoryInfo struct {
+	// TotalPhysical 物理内存总量（字节）
+	TotalPhysical uint64
+	// AvailablePhysical 可用物理内存（字节）
+	AvailablePhysical uint64
+	// UsedPhysical 已用物理内存（字节）
+	UsedPhysical uint64
+	// TotalVirtual 虚拟内存总量（字节，含 pagefile）
+	TotalVirtual uint64
+	// AvailableVirtual 可用虚拟内存（字节）
+	AvailableVirtual uint64
+	// UsedVirtual 已用虚拟内存（字节）
+	UsedVirtual uint64
+	// MemoryLoad 内存使用率（0-100）
+	MemoryLoad uint32
+}
+
+// DriveInfo 保存逻辑驱动器信息
+type DriveInfo struct {
+	// Drive 盘符（如 "C:"）
+	Drive string
+	// Type 驱动器类型（如 "Fixed"、"CD-ROM"、"Removable"）
+	Type string
+	// TotalBytes 驱动器总空间（字节），不可用时为 0
+	TotalBytes uint64
+	// FreeBytes 驱动器可用空间（字节），不可用时为 0
+	FreeBytes uint64
+}
 
 // Is64 返回操作系统是否为64位
 //   返回 - 64位返回true，否则返回false
@@ -273,7 +304,99 @@ func Poweroff() error {
 	return exitWindowsEx(0x00000008, 0) // EWX_POWEROFF
 }
 
+// Memory 返回系统物理内存和虚拟内存信息
+//   返回 - 系统内存信息
+//   返回 - 错误信息
+func Memory() (MemoryInfo, error) {
+	ms, err := globalMemoryStatusEx()
+	if err != nil {
+		return MemoryInfo{}, err
+	}
+	return MemoryInfo{
+		TotalPhysical:     ms.ullTotalPhys,
+		AvailablePhysical: ms.ullAvailPhys,
+		UsedPhysical:      ms.ullTotalPhys - ms.ullAvailPhys,
+		TotalVirtual:      ms.ullTotalPageFile,
+		AvailableVirtual:  ms.ullAvailPageFile,
+		UsedVirtual:       ms.ullTotalPageFile - ms.ullAvailPageFile,
+		MemoryLoad:        ms.dwMemoryLoad,
+	}, nil
+}
+
+// CPUModel 返回 CPU 型号名称
+//   返回 - CPU 型号名称（如 "Intel(R) Core(TM) i7-10700K CPU @ 3.80GHz"）
+//   返回 - 错误信息
+func CPUModel() (string, error) {
+	k, err := registry.OpenKey(registry.LOCAL_MACHINE,
+		`HARDWARE\DESCRIPTION\System\CentralProcessor\0`,
+		registry.QUERY_VALUE)
+	if err != nil {
+		return "", fmt.Errorf("open CPU registry key failed: %w", err)
+	}
+	defer k.Close()
+
+	name, _, err := k.GetStringValue("ProcessorNameString")
+	if err != nil {
+		return "", fmt.Errorf("read ProcessorNameString failed: %w", err)
+	}
+	return strings.TrimSpace(name), nil
+}
+
+// Drives 返回所有逻辑驱动器信息（类型、总空间、可用空间）
+//   返回 - 逻辑驱动器信息列表
+//   返回 - 错误信息
+func Drives() ([]DriveInfo, error) {
+	buf := make([]uint16, 256)
+	n, err := windows.GetLogicalDriveStrings(uint32(len(buf)), &buf[0])
+	if err != nil {
+		return nil, fmt.Errorf("GetLogicalDriveStrings failed: %w", err)
+	}
+
+	var drives []DriveInfo
+	for _, s := range strings.Split(windows.UTF16ToString(buf[:n]), "\x00") {
+		if s == "" {
+			continue
+		}
+		root := windows.StringToUTF16Ptr(s)
+		driveType := windows.GetDriveType(root)
+
+		di := DriveInfo{
+			Drive: s,
+			Type:  driveTypeString(driveType),
+		}
+
+		// GetDiskFreeSpaceEx fails for some drive types (e.g. empty CD-ROM)
+		var total, free uint64
+		if err := windows.GetDiskFreeSpaceEx(root, nil, &total, &free); err == nil {
+			di.TotalBytes = total
+			di.FreeBytes = free
+		}
+
+		drives = append(drives, di)
+	}
+	return drives, nil
+}
+
 // --- private helpers ---
+
+func driveTypeString(dt uint32) string {
+	switch dt {
+	case 2:
+		return "Removable"
+	case 3:
+		return "Fixed"
+	case 4:
+		return "Remote"
+	case 5:
+		return "CD-ROM"
+	case 6:
+		return "RAM Disk"
+	case 1:
+		return "No Root"
+	default:
+		return "Unknown"
+	}
+}
 
 func rtlGetNtVersionNumbers() (major, minor, build uint32) {
 	mod := windows.NewLazySystemDLL("ntdll.dll")
