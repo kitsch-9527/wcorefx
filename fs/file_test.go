@@ -278,6 +278,65 @@ func TestVolumes(t *testing.T) {
 	}
 }
 
+// TestSha1_KnownFile 测试已知文件的 SHA1 计算，验证返回 40 字符十六进制字符串。
+func TestSha1_KnownFile(t *testing.T) {
+	hash, err := Sha1(versionFile)
+	if err != nil {
+		t.Fatalf("Sha1(%q) failed: %v", versionFile, err)
+	}
+	if len(hash) != 40 {
+		t.Errorf("Sha1(%q) len = %d, want 40", versionFile, len(hash))
+	}
+	t.Logf("Sha1(%q) = %s", versionFile, hash)
+}
+
+// TestSha1_KnownValue 测试已知内容的 SHA1 值。
+func TestSha1_KnownValue(t *testing.T) {
+	content := []byte("hello")
+	expected := "aaf4c61ddcc5e8a2dabede0f3b482cd9aea9434d"
+
+	dir := t.TempDir()
+	path := filepath.Join(dir, "hello.txt")
+	if err := os.WriteFile(path, content, 0644); err != nil {
+		t.Fatalf("WriteFile failed: %v", err)
+	}
+
+	hash, err := Sha1(path)
+	if err != nil {
+		t.Fatalf("Sha1(%q) failed: %v", path, err)
+	}
+	if hash != expected {
+		t.Errorf("Sha1(%q) = %s, want %s", path, hash, expected)
+	}
+}
+
+// TestSha1_EmptyFile 测试空文件的 SHA1 值。
+func TestSha1_EmptyFile(t *testing.T) {
+	expected := "da39a3ee5e6b4b0d3255bfef95601890afd80709"
+
+	dir := t.TempDir()
+	path := filepath.Join(dir, "empty.txt")
+	if err := os.WriteFile(path, []byte{}, 0644); err != nil {
+		t.Fatalf("WriteFile failed: %v", err)
+	}
+
+	hash, err := Sha1(path)
+	if err != nil {
+		t.Fatalf("Sha1(%q) failed: %v", path, err)
+	}
+	if hash != expected {
+		t.Errorf("Sha1(%q) = %s, want %s", path, hash, expected)
+	}
+}
+
+// TestSha1_InvalidPath 测试无效路径返回错误。
+func TestSha1_InvalidPath(t *testing.T) {
+	_, err := Sha1("Z:\\nonexistent_file_012345")
+	if err == nil {
+		t.Error("expected error for nonexistent file, got nil")
+	}
+}
+
 func TestExample(t *testing.T) {
 	// Example: retrieving timestamps and version info for a system DLL.
 	path := versionFile

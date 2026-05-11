@@ -3,7 +3,10 @@
 package fs
 
 import (
+	"crypto/sha1"
+	"encoding/hex"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"time"
@@ -313,4 +316,22 @@ func VersionInfo(path string) (string, error) {
 	revision := fixedInfo.FileVersionLS & 0xFFFF
 
 	return fmt.Sprintf("%d.%d.%d.%d", major, minor, build, revision), nil
+}
+
+// Sha1 返回指定文件的 SHA1 哈希值（十六进制小写字符串）。
+//   path - 目标文件路径。
+//   返回 - 40 字符的 SHA1 十六进制字符串，失败时返回错误。
+func Sha1(path string) (string, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return "", fmt.Errorf("open file failed: %w", err)
+	}
+	defer f.Close()
+
+	h := sha1.New()
+	if _, err := io.Copy(h, f); err != nil {
+		return "", fmt.Errorf("sha1 compute failed: %w", err)
+	}
+
+	return hex.EncodeToString(h.Sum(nil)), nil
 }
