@@ -5,10 +5,11 @@ package wmi
 
 import (
 	"fmt"
+	"math"
 	"reflect"
 	"strings"
+	"sync"
 	"time"
-	"unsafe"
 
 	ole "github.com/go-ole/go-ole"
 	"github.com/go-ole/go-ole/oleutil"
@@ -16,6 +17,7 @@ import (
 
 // Session 表示一个 WMI 连接会话
 type Session struct {
+	mu      sync.Mutex
 	service *ole.IDispatch
 	closed  bool
 }
@@ -67,6 +69,8 @@ func Connect(namespace ...string) (*Session, error) {
 
 // Close 关闭 WMI 连接并释放 COM 资源
 func (s *Session) Close() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	if s.closed {
 		return
 	}
@@ -90,6 +94,12 @@ type QueryResult struct {
 //   返回 - 查询结果
 //   返回 - 错误信息
 func (s *Session) Query(wql string) (*QueryResult, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.closed {
+		return nil, fmt.Errorf("session 已关闭")
+	}
+
 	resultVar, err := oleutil.CallMethod(s.service, "ExecQuery", wql)
 	if err != nil {
 		return nil, fmt.Errorf("ExecQuery 失败: %w", err)
@@ -234,14 +244,14 @@ func variantToValue(v *ole.VARIANT) interface{} {
 	case ole.VT_BOOL:
 		return (v.Val & 0xffff) != 0
 	case ole.VT_R4:
-		return *(*float32)(unsafe.Pointer(&v.Val))
+		return math.Float32frombits(uint32(v.Val))
 	case ole.VT_R8:
-		return *(*float64)(unsafe.Pointer(&v.Val))
+		return math.Float64frombits(uint64(v.Val))
 	case ole.VT_DATE:
 		d := uint64(v.Val)
 		date, err := ole.GetVariantDate(d)
 		if err != nil {
-			return time.Now()
+			return time.Time{}
 		}
 		return date
 	case ole.VT_NULL, ole.VT_EMPTY:
