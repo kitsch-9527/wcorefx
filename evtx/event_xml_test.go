@@ -1,6 +1,6 @@
 //go:build windows
 
-package event
+package evtx
 
 import (
 	"testing"
@@ -163,3 +163,4 @@ func TestFormat(t *testing.T) {
 		t.Errorf("EventID = %d, want 100", results[0].EventID)
 	}
 }
+

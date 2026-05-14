@@ -1,6 +1,6 @@
 //go:build windows
 
-package event
+package evtx
 
 import (
 	"testing"
@@ -96,3 +96,4 @@ func TestDefaultWinMeta(t *testing.T) {
 		t.Errorf("Keywords[AuditFailure] = %q", defaultWinMeta.Keywords[0x10000000000000])
 	}
 }
+

@@ -12,8 +12,6 @@ import (
 
 	"golang.org/x/sys/windows"
 
-	"github.com/kitsch-9527/wcorefx/event"
-
 	"github.com/kitsch-9527/wcorefx/internal/winapi"
 )
 
@@ -104,7 +102,7 @@ func (r *Reader) Open(recordNumber uint64) error {
 // Read 从日志中读取事件。
 //   返回1 - 事件记录切片
 //   返回2 - 读取过程中的错误，成功时为nil
-func (r *Reader) Read() ([]event.Record, error) {
+func (r *Reader) Read() ([]Record, error) {
 	handles, err := r.getEventHandles()
 	if err != nil {
 		return nil, fmt.Errorf("get handles: %w", err)
@@ -119,7 +117,7 @@ func (r *Reader) Read() ([]event.Record, error) {
 		}
 	}()
 
-	var records []event.Record
+	var records []Record
 	for _, h := range handles {
 		r.outputBuf.Reset()
 		err := RenderEventXML(h, r.renderBuf, r.outputBuf)
@@ -134,15 +132,15 @@ func (r *Reader) Read() ([]event.Record, error) {
 		}
 
 		xmlData := r.outputBuf.Bytes()
-		evt, err := event.UnmarshalXML(xmlData)
+		evt, err := UnmarshalXML(xmlData)
 		if err != nil {
 			log.Printf("warn: unmarshal xml: %v", err)
 			continue
 		}
 
-		event.PopulateAccount(&evt.User)
+		PopulateAccount(&evt.User)
 
-		records = append(records, event.Record{
+		records = append(records, Record{
 			Event: evt,
 			API:   "evtx",
 			XML:   string(xmlData),
@@ -202,7 +200,7 @@ func (r *Reader) getEventHandles() ([]EvtHandle, error) {
 //   target - 通道名称或.evtx文件路径
 //   eventID - 要过滤的事件ID字符串
 //   返回 - 事件记录切片，出错或未找到时返回nil
-func GetEvents(target, eventID string) []event.Record {
+func GetEvents(target, eventID string) []Record {
 	reader, err := NewReader(target, eventID)
 	if err != nil {
 		log.Printf("warn: create reader: %v", err)
@@ -362,4 +360,5 @@ func EvtOpenLog(session EvtHandle, path string, flags EvtOpenLogFlag) (EvtHandle
 
 // Ensure unused import suppression.
 var _ = unsafe.Pointer(nil)
+
 

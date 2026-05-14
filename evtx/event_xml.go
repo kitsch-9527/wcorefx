@@ -1,6 +1,6 @@
 //go:build windows
 
-package event
+package evtx
 
 import (
 	"bytes"
@@ -116,3 +116,4 @@ func (e Event) String() string {
 	return fmt.Sprintf("Event ID=%d Provider=%s Level=%s Time=%s",
 		e.EventIdentifier.ID, e.Provider.Name, e.Level, e.TimeCreated.SystemTime)
 }
+

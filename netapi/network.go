@@ -290,127 +290,22 @@ func udpEndpoints[T any](_ T, af, tableClass int) ([]T, error) {
 
 // WfpCallouts 枚举所有 WFP 标注。
 func WfpCallouts() ([]FwpmCallout, error) {
-	var (
-		entries    []*FwpmCallout0
-		numEntries uint32
-		array      **FwpmCallout0
-	)
-	session := FwpmSession0{
-		DisplayData: FwpmDisplayData0{
-			Name: windows.StringToUTF16Ptr("wcorefx"),
-		},
-	}
-	engineH, err := FwpmEngineOpen(nil, 10, nil, &session)
+	s, err := NewWfpSession()
 	if err != nil {
-		return nil, fmt.Errorf("FwpmEngineOpen: %w", err)
+		return nil, err
 	}
-	defer FwpmEngineClose(engineH)
-
-	enumH, err := FwpmCalloutCreateEnumHandle(engineH, nil)
-	if err != nil {
-		return nil, fmt.Errorf("FwpmCalloutCreateEnumHandle: %w", err)
-	}
-	defer FwpmCalloutDestroyEnumHandle(engineH, enumH)
-
-	err = FwpmCalloutEnum(engineH, enumH, 0xFFFFFFFF, &array, &numEntries)
-	if err != nil {
-		return nil, fmt.Errorf("FwpmCalloutEnum: %w", err)
-	}
-	if numEntries == 0 {
-		return nil, nil
-	}
-
-	sh := (*struct {
-		Data uintptr
-		Len  int
-		Cap  int
-	})(unsafe.Pointer(&entries))
-	sh.Cap = int(numEntries)
-	sh.Len = int(numEntries)
-	sh.Data = uintptr(unsafe.Pointer(array))
-	defer FwpmFreeMemory(unsafe.Pointer(array))
-
-	result := make([]FwpmCallout, 0, numEntries)
-	for _, c := range entries {
-		result = append(result, FwpmCallout{
-			CalloutKey:   c.CalloutKey,
-			CalloutId:    c.CalloutId,
-			Name:         windows.UTF16PtrToString(c.DisplayData.Name),
-			Description:  windows.UTF16PtrToString(c.DisplayData.Description),
-			Flags:        c.Flags,
-			ProviderKey:  c.ProviderKey,
-			ProviderData: c.ProviderData,
-			LayerKey:     c.LayerKey,
-		})
-	}
-	return result, nil
+	defer s.Close()
+	return s.Callouts()
 }
 
 // WfpFilters 枚举所有 WFP 过滤器。
 func WfpFilters() ([]FwpmFilter, error) {
-	var (
-		entries    []*FwpmFilter0
-		numEntries uint32
-		array      **FwpmFilter0
-	)
-	session := FwpmSession0{
-		DisplayData: FwpmDisplayData0{
-			Name: windows.StringToUTF16Ptr("wcorefx"),
-		},
-	}
-	engineH, err := FwpmEngineOpen(nil, 10, nil, &session)
+	s, err := NewWfpSession()
 	if err != nil {
-		return nil, fmt.Errorf("FwpmEngineOpen: %w", err)
+		return nil, err
 	}
-	defer FwpmEngineClose(engineH)
-
-	enumH, err := FwpmFilterCreateEnumHandle(engineH, nil)
-	if err != nil {
-		return nil, fmt.Errorf("FwpmFilterCreateEnumHandle: %w", err)
-	}
-	defer FwpmFilterDestroyEnumHandle(engineH, enumH)
-
-	err = FwpmFilterEnum(engineH, enumH, 0xFFFFFFFF, &array, &numEntries)
-	if err != nil {
-		return nil, fmt.Errorf("FwpmFilterEnum: %w", err)
-	}
-	if numEntries == 0 {
-		return nil, nil
-	}
-
-	sh := (*struct {
-		Data uintptr
-		Len  int
-		Cap  int
-	})(unsafe.Pointer(&entries))
-	sh.Cap = int(numEntries)
-	sh.Len = int(numEntries)
-	sh.Data = uintptr(unsafe.Pointer(array))
-	defer FwpmFreeMemory(unsafe.Pointer(array))
-
-	result := make([]FwpmFilter, 0, numEntries)
-	for _, f := range entries {
-		result = append(result, FwpmFilter{
-			FilterKey:           f.FilterKey,
-			Name:                windows.UTF16PtrToString(f.DisplayData.Name),
-			Description:         windows.UTF16PtrToString(f.DisplayData.Description),
-			Flags:               f.Flags,
-			ProviderKey:         f.ProviderKey,
-			ProviderData:        f.ProviderData,
-			LayerKey:            f.LayerKey,
-			SublayerKey:         f.SublayerKey,
-			Weight:              f.Weight,
-			NumFilterConditions: f.NumFilterConditions,
-			FilterConditions:    f.FilterConditions,
-			Action:              f.Action,
-			RawContext:          f.RawContext,
-			ProviderContextKey:  f.ProviderContextKey,
-			Reserved:            f.Reserved,
-			FilterID:            f.FilterID,
-			EffectiveWeight:     f.EffectiveWeight,
-		})
-	}
-	return result, nil
+	defer s.Close()
+	return s.Filters()
 }
 
 // Interfaces 返回所有网络接口信息。

@@ -1,6 +1,6 @@
 //go:build windows
 
-package event
+package evtx
 
 import (
 	"encoding/xml"
@@ -323,3 +323,4 @@ func RemoveWindowsLineEndings(s string) string {
 	s = strings.ReplaceAll(s, "\r\n", "\n")
 	return strings.TrimRight(s, "\n")
 }
+
