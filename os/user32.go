@@ -3,18 +3,20 @@
 package os
 
 import (
+	"fmt"
+
 	"golang.org/x/sys/windows"
+
+	"github.com/kitsch-9527/wcorefx/internal/winapi"
 )
 
-var moduser32 = windows.NewLazySystemDLL("user32.dll")
-
-var procExitWindowsEx = moduser32.NewProc("ExitWindowsEx")
+var procExitWindowsEx = winapi.NewProc("user32.dll", "ExitWindowsEx")
 
 func exitWindowsEx(flags uint32, reason uint32) error {
 	_ = enableShutdownPrivilege()
-	r1, _, _ := procExitWindowsEx.Call(uintptr(flags), uintptr(reason))
-	if r1 == 0 {
-		return windows.GetLastError()
+	err := procExitWindowsEx.Call(uintptr(flags), uintptr(reason))
+	if err != nil {
+		return fmt.Errorf("ExitWindowsEx failed: %w", err)
 	}
 	return nil
 }

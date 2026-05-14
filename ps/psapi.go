@@ -3,10 +3,11 @@
 package ps
 
 import (
-	"syscall"
 	"unsafe"
 
 	"golang.org/x/sys/windows"
+
+	"github.com/kitsch-9527/wcorefx/internal/winapi"
 )
 
 type processMemoryCounters struct {
@@ -22,22 +23,18 @@ type processMemoryCounters struct {
 	PeakPagefileUsage          uintptr
 }
 
-var (
-	modpsapi = windows.NewLazySystemDLL("psapi.dll")
-
-	procGetProcessMemoryInfo = modpsapi.NewProc("GetProcessMemoryInfo")
-)
+var procGetProcessMemoryInfo = winapi.NewProc("psapi.dll", "GetProcessMemoryInfo")
 
 func getProcessMemoryInfo(handle windows.Handle) (processMemoryCounters, error) {
 	var mem processMemoryCounters
 	mem.CB = uint32(unsafe.Sizeof(mem))
-	r1, _, _ := procGetProcessMemoryInfo.Call(
+	err := procGetProcessMemoryInfo.Call(
 		uintptr(handle),
 		uintptr(unsafe.Pointer(&mem)),
 		uintptr(mem.CB),
 	)
-	if r1 == 0 {
-		return mem, syscall.GetLastError()
+	if err != nil {
+		return mem, err
 	}
 	return mem, nil
 }

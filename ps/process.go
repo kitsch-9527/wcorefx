@@ -8,7 +8,7 @@ import (
 	"strings"
 	"unsafe"
 
-	"github.com/kitsch-9527/wcorefx/obj"
+	"github.com/kitsch-9527/wcorefx/os"
 	"golang.org/x/sys/windows"
 )
 
@@ -226,7 +226,7 @@ func Path(pid uint32) (string, error) {
 		return "", fmt.Errorf("QueryFullProcessImageName failed: %w", err)
 	}
 	nativePath := windows.UTF16ToString(nativeBuf[:size])
-	return obj.NativePathToDosPath(nativePath)
+	return os.NativePathToDosPath(nativePath)
 }
 
 // User 返回指定PID进程所属的域\用户名

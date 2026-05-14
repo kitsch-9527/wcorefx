@@ -3,19 +3,18 @@
 package obj
 
 import (
-	"syscall"
 	"unsafe"
 
 	"golang.org/x/sys/windows"
+
+	"github.com/kitsch-9527/wcorefx/internal/winapi"
 )
 
-var modpsapi = windows.NewLazySystemDLL("psapi.dll")
-
 var (
-	procEnumDeviceDrivers        = modpsapi.NewProc("EnumDeviceDrivers")
-	procGetDeviceDriverFileNameW = modpsapi.NewProc("GetDeviceDriverFileNameW")
-	procGetDeviceDriverBaseNameW = modpsapi.NewProc("GetDeviceDriverBaseNameW")
-	procGetProcessMemoryInfo     = modpsapi.NewProc("GetProcessMemoryInfo")
+	procEnumDeviceDrivers        = winapi.NewProc("psapi.dll", "EnumDeviceDrivers")
+	procGetDeviceDriverFileNameW = winapi.NewProc("psapi.dll", "GetDeviceDriverFileNameW")
+	procGetDeviceDriverBaseNameW = winapi.NewProc("psapi.dll", "GetDeviceDriverBaseNameW")
+	procGetProcessMemoryInfo     = winapi.NewProc("psapi.dll", "GetProcessMemoryInfo")
 )
 
 type processMemoryCounters struct {
@@ -32,65 +31,33 @@ type processMemoryCounters struct {
 }
 
 func enumDeviceDrivers(drivers *uintptr, cb uint32, lpcNeeded *uint32) error {
-	r1, _, e1 := syscall.SyscallN(
-		procEnumDeviceDrivers.Addr(),
+	return procEnumDeviceDrivers.Call(
 		uintptr(unsafe.Pointer(drivers)),
 		uintptr(cb),
 		uintptr(unsafe.Pointer(lpcNeeded)),
 	)
-	if r1 == 0 {
-		if e1 != 0 {
-			return e1
-		}
-		return syscall.EINVAL
-	}
-	return nil
 }
 
 func getDeviceDriverFileName(driver uintptr, lpFilename *uint16, nSize uint32) error {
-	r1, _, e1 := syscall.SyscallN(
-		procGetDeviceDriverFileNameW.Addr(),
+	return procGetDeviceDriverFileNameW.Call(
 		driver,
 		uintptr(unsafe.Pointer(lpFilename)),
 		uintptr(nSize),
 	)
-	if r1 == 0 {
-		if e1 != 0 {
-			return e1
-		}
-		return syscall.EINVAL
-	}
-	return nil
 }
 
 func getDeviceDriverBaseName(driver uintptr, lpBaseName *uint16, nSize uint32) error {
-	r1, _, e1 := syscall.SyscallN(
-		procGetDeviceDriverBaseNameW.Addr(),
+	return procGetDeviceDriverBaseNameW.Call(
 		driver,
 		uintptr(unsafe.Pointer(lpBaseName)),
 		uintptr(nSize),
 	)
-	if r1 == 0 {
-		if e1 != 0 {
-			return e1
-		}
-		return syscall.EINVAL
-	}
-	return nil
 }
 
 func getProcessMemoryInfo(h windows.Handle, mem *processMemoryCounters) error {
-	r1, _, e1 := syscall.SyscallN(
-		procGetProcessMemoryInfo.Addr(),
+	return procGetProcessMemoryInfo.Call(
 		uintptr(h),
 		uintptr(unsafe.Pointer(mem)),
 		uintptr(unsafe.Sizeof(*mem)),
 	)
-	if r1 == 0 {
-		if e1 != 0 {
-			return e1
-		}
-		return syscall.EINVAL
-	}
-	return nil
 }

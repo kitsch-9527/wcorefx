@@ -6,152 +6,99 @@ import (
 	"encoding/binary"
 	"fmt"
 	"net"
-	"reflect"
-	"syscall"
 	"unsafe"
 
 	"golang.org/x/sys/windows"
+
+	"github.com/kitsch-9527/wcorefx/internal/winapi"
 )
 
 // MIB_TCPROW_OWNER_PID 表示 MIB_TCPROW_OWNER_PID 结构，包含 TCP 连接信息及所属进程 PID。
 type MIB_TCPROW_OWNER_PID struct {
-	// DwState TCP 状态。
 	DwState      uint32
-	// DwLocalAddr 本地 IPv4 地址（网络字节序）。
 	DwLocalAddr  uint32
-	// DwLocalPort 本地端口（网络字节序）。
 	DwLocalPort  uint32
-	// DwRemoteAddr 远端 IPv4 地址（网络字节序）。
 	DwRemoteAddr uint32
-	// DwRemotePort 远端端口（网络字节序）。
 	DwRemotePort uint32
-	// DwOwningPid 拥有进程的 PID。
 	DwOwningPid  uint32
 }
 
 // MIB_TCP6ROW_OWNER_PID 表示 MIB_TCP6ROW_OWNER_PID 结构，包含 IPv6 TCP 连接信息及所属进程 PID。
 type MIB_TCP6ROW_OWNER_PID struct {
-	// LocalAddr 本地 IPv6 地址。
 	LocalAddr     [16]byte
-	// LocalScopeId 本地作用域 ID。
 	LocalScopeId  uint32
-	// LocalPort 本地端口。
 	LocalPort     uint32
-	// RemoteAddr 远端 IPv6 地址。
 	RemoteAddr    [16]byte
-	// RemoteScopeId 远端作用域 ID。
 	RemoteScopeId uint32
-	// RemotePort 远端端口。
 	RemotePort    uint32
-	// DwState TCP 状态。
 	DwState       uint32
-	// DwOwningPid 拥有进程的 PID。
 	DwOwningPid   uint32
 }
 
 // MIB_UDPROW_OWNER_PID 表示 MIB_UDPROW_OWNER_PID 结构，包含 UDP 端点信息及所属进程 PID。
 type MIB_UDPROW_OWNER_PID struct {
-	// DwLocalAddr 本地 IPv4 地址（网络字节序）。
 	DwLocalAddr uint32
-	// DwLocalPort 本地端口（网络字节序）。
 	DwLocalPort uint32
-	// DwOwningPid 拥有进程的 PID。
 	DwOwningPid uint32
 }
 
 // MIB_UDP6ROW_OWNER_PID 表示 MIB_UDP6ROW_OWNER_PID 结构，包含 IPv6 UDP 端点信息及所属进程 PID。
 type MIB_UDP6ROW_OWNER_PID struct {
-	// LocalAddr 本地 IPv6 地址。
 	LocalAddr    [16]byte
-	// LocalScopeId 本地作用域 ID。
 	LocalScopeId uint32
-	// LocalPort 本地端口。
 	LocalPort    uint32
-	// DwOwningPid 拥有进程的 PID。
 	DwOwningPid  uint32
 }
 
 // InterfaceInfo 表示网络接口信息。
 type InterfaceInfo struct {
-	// Name 接口名称。
 	Name        string
-	// Description 接口描述。
 	Description string
-	// IP 接口 IP 地址。
 	IP          string
-	// MAC 接口 MAC 地址。
 	MAC         []byte
-	// IsUp 接口是否启用。
 	IsUp        bool
-	// Speed 接口速度（bps）。
 	Speed       uint64
 }
 
 // ARPEntry 表示 ARP 表条目。
 type ARPEntry struct {
-	// IP 目标 IP 地址。
 	IP      string
-	// MAC MAC 地址。
 	MAC     []byte
-	// IfIndex 接口索引。
 	IfIndex uint32
 }
 
 // RouteEntry 表示路由表条目。
 type RouteEntry struct {
-	// Destination 目标网络。
 	Destination string
-	// NextHop 下一跳。
 	NextHop     string
-	// IfIndex 接口索引。
 	IfIndex     uint32
-	// Metric 路由度量。
 	Metric      uint32
 }
 
 const (
-	// AF_INET IPv4 地址族常量。
 	AF_INET                  = 2
-	// AF_INET6 IPv6 地址族常量。
 	AF_INET6                 = 23
-	// TCP_TABLE_OWNER_PID_ALL TCP 所有连接表标识。
 	TCP_TABLE_OWNER_PID_ALL  = 5
-	// UDP_TABLE_OWNER_PID UDP 监听表标识。
 	UDP_TABLE_OWNER_PID      = 1
-	_ = 122 // errorInsufficientBuffer
 )
 
 // MibTCPState 常量定义 TCP 连接状态枚举值。
 const (
-	// MibTCPStateClosed TCP 连接已关闭。
 	MibTCPStateClosed      = iota + 1
-	// MibTCPStateListen TCP 正在监听。
 	MibTCPStateListen
-	// MibTCPStateSynSent TCP 已发送 SYN。
 	MibTCPStateSynSent
-	// MibTCPStateSynRcvd TCP 已收到 SYN。
 	MibTCPStateSynRcvd
-	// MibTCPStateEstablished TCP 连接已建立。
 	MibTCPStateEstablished
-	// MibTCPStateFinWait1 TCP 正在 FIN-WAIT-1 状态。
 	MibTCPStateFinWait1
-	// MibTCPStateFinWait2 TCP 正在 FIN-WAIT-2 状态。
 	MibTCPStateFinWait2
-	// MibTCPStateCloseWait TCP 正在 CLOSE-WAIT 状态。
 	MibTCPStateCloseWait
-	// MibTCPStateClosing TCP 正在 CLOSING 状态。
 	MibTCPStateClosing
-	// MibTCPStateLastAck TCP 正在 LAST-ACK 状态。
 	MibTCPStateLastAck
-	// MibTCPStateTimeWait TCP 正在 TIME-WAIT 状态。
 	MibTCPStateTimeWait
-	// MibTCPStateDeleteTCB TCP 正在删除 TCB。
 	MibTCPStateDeleteTCB
 )
 
 // TCPState 将 TCP 状态数值转换为可读的字符串描述。
-//   state - TCP 状态数值
-//   返回 - TCP 状态对应的字符串描述
 func TCPState(state uint32) string {
 	switch state {
 	case MibTCPStateClosed:
@@ -184,8 +131,6 @@ func TCPState(state uint32) string {
 }
 
 // InetNtoa 将 32 位网络字节序的 IPv4 地址转换为字符串。
-//   addr - 网络字节序的 32 位 IPv4 地址
-//   返回 - IPv4 地址字符串
 func InetNtoa(addr uint32) string {
 	return net.IPv4(
 		byte(addr>>24),
@@ -196,121 +141,54 @@ func InetNtoa(addr uint32) string {
 }
 
 // InetNtoa6 将 128 位网络字节序的 IPv6 地址转换为字符串。
-//   addr - 网络字节序的 128 位 IPv6 地址
-//   返回 - IPv6 地址字符串
 func InetNtoa6(addr [16]byte) string {
 	return net.IP(addr[:]).String()
 }
 
 // Ntohs 将网络字节序（大端）的 16 位端口值转换为主机字节序。
-//   port - 网络字节序的 16 位端口值（存储在 uint32 低位）
-//   返回 - 主机字节序的端口值
 func Ntohs(port uint32) uint16 {
 	return uint16((port>>8)|(port<<8)) & 0xffff
 }
 
 // CalloutInfo 存储 WFP 标注信息。
 type CalloutInfo struct {
-	// CalloutId 标注 ID。
 	CalloutId   uint32
-	// CalloutKey 标注 GUID 键。
 	CalloutKey  windows.GUID
-	// Name 标注名称。
 	Name        string
-	// Description 标注描述。
 	Description string
 }
 
 // FwpmCallout 存储完整的 WFP 标注数据。
 type FwpmCallout struct {
-	// CalloutKey 标注 GUID 键。
 	CalloutKey   windows.GUID
-	// Name 标注名称。
 	Name         string
-	// Description 标注描述。
 	Description  string
-	// Flags 标注标志。
 	Flags        FwpmFilterFlags
-	// ProviderKey 提供商键（可选）。
 	ProviderKey  *windows.GUID
-	// ProviderData 提供商数据。
 	ProviderData FwpByteBlob
-	// LayerKey 层标识。
 	LayerKey     LayerID
-	// CalloutId 标注 ID。
 	CalloutId    uint32
 }
 
 // FwpmFilter 存储完整的 WFP 过滤器数据。
 type FwpmFilter struct {
-	// FilterKey 过滤器 GUID 键。
 	FilterKey           windows.GUID
-	// Name 过滤器名称。
 	Name                string
-	// Description 过滤器描述。
 	Description         string
-	// Flags 过滤器标志。
 	Flags               FwpmFilterFlags
-	// ProviderKey 提供商键（可选）。
 	ProviderKey         *windows.GUID
-	// ProviderData 提供商数据。
 	ProviderData        FwpByteBlob
-	// LayerKey 层标识。
 	LayerKey            LayerID
-	// SublayerKey 子层标识。
 	SublayerKey         SublayerID
-	// Weight 过滤器权重。
 	Weight              FwpValue0
-	// NumFilterConditions 过滤条件数量。
 	NumFilterConditions uint32
-	// FilterConditions 过滤条件数组指针。
 	FilterConditions    *FwpmFilterCondition0
-	// Action 过滤动作。
 	Action              FwpmAction0
-	// RawContext 原始上下文。
 	RawContext          uint64
-	// ProviderContextKey 提供商上下文键。
 	ProviderContextKey  windows.GUID
-	// Reserved 保留字段。
 	Reserved            *windows.GUID
-	// FilterID 过滤器 ID。
 	FilterID            uint64
-	// EffectiveWeight 有效权重。
 	EffectiveWeight     FwpValue0
-}
-
-func getTcpTableBuffer(sort bool, af int, tableClass, reserved uint32) ([]byte, uint32, error) {
-	var bufSize uint32
-	err := getExtendedTcpTable(nil, &bufSize, sort, uint32(af), tableClass, reserved)
-	if err != nil && bufSize == 0 {
-		return nil, 0, fmt.Errorf("get tcp table size: %w", err)
-	}
-	buf := make([]byte, bufSize)
-	err = getExtendedTcpTable(&buf[0], &bufSize, sort, uint32(af), tableClass, reserved)
-	if err != nil {
-		return nil, 0, fmt.Errorf("get tcp table: %w", err)
-	}
-	if len(buf) < 4 {
-		return nil, 0, fmt.Errorf("buffer too small for header")
-	}
-	return buf, binary.LittleEndian.Uint32(buf[:4]), nil
-}
-
-func getUdpTableBuffer(sort bool, af int, tableClass, reserved uint32) ([]byte, uint32, error) {
-	var bufSize uint32
-	err := getExtendedUdpTable(nil, &bufSize, sort, uint32(af), tableClass, reserved)
-	if err != nil && bufSize == 0 {
-		return nil, 0, fmt.Errorf("get udp table size: %w", err)
-	}
-	buf := make([]byte, bufSize)
-	err = getExtendedUdpTable(&buf[0], &bufSize, sort, uint32(af), tableClass, reserved)
-	if err != nil {
-		return nil, 0, fmt.Errorf("get udp table: %w", err)
-	}
-	if len(buf) < 4 {
-		return nil, 0, fmt.Errorf("buffer too small for header")
-	}
-	return buf, binary.LittleEndian.Uint32(buf[:4]), nil
 }
 
 func readRows[T any](buffer []byte, numEntries uint32) ([]T, error) {
@@ -333,52 +211,84 @@ func readRows[T any](buffer []byte, numEntries uint32) ([]T, error) {
 }
 
 // Tcp4Endpoints 返回所有 IPv4 TCP 端点条目。
-//   返回1 - IPv4 TCP 端点条目列表
-//   返回2 - 错误信息
 func Tcp4Endpoints() ([]MIB_TCPROW_OWNER_PID, error) {
-	buf, num, err := getTcpTableBuffer(false, AF_INET, TCP_TABLE_OWNER_PID_ALL, 0)
-	if err != nil {
-		return nil, fmt.Errorf("tcp4: %w", err)
-	}
-	return readRows[MIB_TCPROW_OWNER_PID](buf, num)
+	return tcpEndpoints(MIB_TCPROW_OWNER_PID{}, AF_INET, TCP_TABLE_OWNER_PID_ALL)
 }
 
 // Tcp6Endpoints 返回所有 IPv6 TCP 端点条目。
-//   返回1 - IPv6 TCP 端点条目列表
-//   返回2 - 错误信息
 func Tcp6Endpoints() ([]MIB_TCP6ROW_OWNER_PID, error) {
-	buf, num, err := getTcpTableBuffer(false, AF_INET6, TCP_TABLE_OWNER_PID_ALL, 0)
+	return tcpEndpoints(MIB_TCP6ROW_OWNER_PID{}, AF_INET6, TCP_TABLE_OWNER_PID_ALL)
+}
+
+func tcpEndpoints[T any](_ T, af, tableClass int) ([]T, error) {
+	buf, err := winapi.BufferQuery(winapi.FuncStrategy(func(buf []byte) (int, error) {
+		var size uint32 = uint32(len(buf))
+		p := (*byte)(nil)
+		if len(buf) > 0 {
+			p = &buf[0]
+		}
+		err := procGetExtendedTcpTable.Call(
+			uintptr(unsafe.Pointer(p)),
+			uintptr(unsafe.Pointer(&size)),
+			0, uintptr(af), uintptr(tableClass), 0,
+		)
+		if err != nil {
+			if winapi.IsErrInsufficientBuffer(err) {
+				return 0, &winapi.ErrInsufficientBuffer{Size: int(size)}
+			}
+			return 0, err
+		}
+		return int(size), nil
+	}))
 	if err != nil {
-		return nil, fmt.Errorf("tcp6: %w", err)
+		return nil, fmt.Errorf("tcp: %w", err)
 	}
-	return readRows[MIB_TCP6ROW_OWNER_PID](buf, num)
+	if len(buf) < 4 {
+		return nil, fmt.Errorf("tcp: buffer too small for header")
+	}
+	return readRows[T](buf, binary.LittleEndian.Uint32(buf[:4]))
 }
 
 // Udp4Endpoints 返回所有 IPv4 UDP 端点条目。
-//   返回1 - IPv4 UDP 端点条目列表
-//   返回2 - 错误信息
 func Udp4Endpoints() ([]MIB_UDPROW_OWNER_PID, error) {
-	buf, num, err := getUdpTableBuffer(false, AF_INET, UDP_TABLE_OWNER_PID, 0)
-	if err != nil {
-		return nil, fmt.Errorf("udp4: %w", err)
-	}
-	return readRows[MIB_UDPROW_OWNER_PID](buf, num)
+	return udpEndpoints(MIB_UDPROW_OWNER_PID{}, AF_INET, UDP_TABLE_OWNER_PID)
 }
 
 // Udp6Endpoints 返回所有 IPv6 UDP 端点条目。
-//   返回1 - IPv6 UDP 端点条目列表
-//   返回2 - 错误信息
 func Udp6Endpoints() ([]MIB_UDP6ROW_OWNER_PID, error) {
-	buf, num, err := getUdpTableBuffer(false, AF_INET6, UDP_TABLE_OWNER_PID, 0)
+	return udpEndpoints(MIB_UDP6ROW_OWNER_PID{}, AF_INET6, UDP_TABLE_OWNER_PID)
+}
+
+func udpEndpoints[T any](_ T, af, tableClass int) ([]T, error) {
+	buf, err := winapi.BufferQuery(winapi.FuncStrategy(func(buf []byte) (int, error) {
+		var size uint32 = uint32(len(buf))
+		p := (*byte)(nil)
+		if len(buf) > 0 {
+			p = &buf[0]
+		}
+		err := procGetExtendedUdpTable.Call(
+			uintptr(unsafe.Pointer(p)),
+			uintptr(unsafe.Pointer(&size)),
+			0, uintptr(af), uintptr(tableClass), 0,
+		)
+		if err != nil {
+			if winapi.IsErrInsufficientBuffer(err) {
+				return 0, &winapi.ErrInsufficientBuffer{Size: int(size)}
+			}
+			return 0, err
+		}
+		return int(size), nil
+	}))
 	if err != nil {
-		return nil, fmt.Errorf("udp6: %w", err)
+		return nil, fmt.Errorf("udp: %w", err)
 	}
-	return readRows[MIB_UDP6ROW_OWNER_PID](buf, num)
+	if len(buf) < 4 {
+		return nil, fmt.Errorf("udp: buffer too small for header")
+	}
+	return readRows[T](buf, binary.LittleEndian.Uint32(buf[:4]))
 }
 
 // WfpCallouts 枚举所有 WFP 标注。
-//   返回1 - WFP 标注列表
-//   返回2 - 错误信息
 func WfpCallouts() ([]FwpmCallout, error) {
 	var (
 		entries    []*FwpmCallout0
@@ -410,7 +320,11 @@ func WfpCallouts() ([]FwpmCallout, error) {
 		return nil, nil
 	}
 
-	sh := (*reflect.SliceHeader)(unsafe.Pointer(&entries))
+	sh := (*struct {
+		Data uintptr
+		Len  int
+		Cap  int
+	})(unsafe.Pointer(&entries))
 	sh.Cap = int(numEntries)
 	sh.Len = int(numEntries)
 	sh.Data = uintptr(unsafe.Pointer(array))
@@ -433,8 +347,6 @@ func WfpCallouts() ([]FwpmCallout, error) {
 }
 
 // WfpFilters 枚举所有 WFP 过滤器。
-//   返回1 - WFP 过滤器列表
-//   返回2 - 错误信息
 func WfpFilters() ([]FwpmFilter, error) {
 	var (
 		entries    []*FwpmFilter0
@@ -466,7 +378,11 @@ func WfpFilters() ([]FwpmFilter, error) {
 		return nil, nil
 	}
 
-	sh := (*reflect.SliceHeader)(unsafe.Pointer(&entries))
+	sh := (*struct {
+		Data uintptr
+		Len  int
+		Cap  int
+	})(unsafe.Pointer(&entries))
 	sh.Cap = int(numEntries)
 	sh.Len = int(numEntries)
 	sh.Data = uintptr(unsafe.Pointer(array))
@@ -498,35 +414,33 @@ func WfpFilters() ([]FwpmFilter, error) {
 }
 
 // Interfaces 返回所有网络接口信息。
-//   返回1 - 网络接口信息列表
-//   返回2 - 错误信息
 func Interfaces() ([]InterfaceInfo, error) {
-	var bufSize uint32
-	// First call to get required buffer size (expect ERROR_BUFFER_OVERFLOW)
-	r1, _, _ := syscall.SyscallN(procGetAdaptersAddresses.Addr(),
-		uintptr(windows.AF_UNSPEC),
-		uintptr(0x0010), // GAA_FLAG_INCLUDE_PREFIX
-		0,
-		0,
-		uintptr(unsafe.Pointer(&bufSize)),
-	)
-	if r1 != 0 && syscall.Errno(r1) != windows.ERROR_BUFFER_OVERFLOW {
-		return nil, fmt.Errorf("GetAdaptersAddresses size query: %w", syscall.Errno(r1))
+	buf, err := winapi.BufferQuery(winapi.FuncStrategy(func(buf []byte) (int, error) {
+		var bufSize uint32 = uint32(len(buf))
+		p := (*byte)(nil)
+		if len(buf) > 0 {
+			p = &buf[0]
+		}
+		err := procGetAdaptersAddresses.Call(
+			uintptr(windows.AF_UNSPEC),
+			uintptr(0x0010), // GAA_FLAG_INCLUDE_PREFIX
+			0,
+			uintptr(unsafe.Pointer(p)),
+			uintptr(unsafe.Pointer(&bufSize)),
+		)
+		if err != nil {
+			if err == windows.ERROR_BUFFER_OVERFLOW || winapi.IsErrInsufficientBuffer(err) {
+				return int(bufSize), &winapi.ErrInsufficientBuffer{Size: int(bufSize)}
+			}
+			return 0, err
+		}
+		return int(bufSize), nil
+	}))
+	if err != nil {
+		return nil, fmt.Errorf("GetAdaptersAddresses: %w", err)
 	}
-	if bufSize == 0 {
-		return nil, fmt.Errorf("GetAdaptersAddresses returned buffer size 0")
-	}
-
-	buf := make([]byte, bufSize)
-	r1, _, _ = syscall.SyscallN(procGetAdaptersAddresses.Addr(),
-		uintptr(windows.AF_UNSPEC),
-		uintptr(0x0010),
-		0,
-		uintptr(unsafe.Pointer(&buf[0])),
-		uintptr(unsafe.Pointer(&bufSize)),
-	)
-	if r1 != 0 {
-		return nil, fmt.Errorf("GetAdaptersAddresses failed: %w", syscall.Errno(r1))
+	if len(buf) == 0 {
+		return nil, fmt.Errorf("GetAdaptersAddresses returned empty buffer")
 	}
 
 	var ifaces []InterfaceInfo
@@ -534,13 +448,12 @@ func Interfaces() ([]InterfaceInfo, error) {
 	for p != nil {
 		info := InterfaceInfo{
 			Name:  windows.UTF16PtrToString(p.FriendlyName),
-			IsUp:  p.OperStatus == 1, // IfOperStatusUp
+			IsUp:  p.OperStatus == 1,
 			Speed: p.TransmitLinkSpeed,
 		}
 		if p.Description != nil {
 			info.Description = windows.UTF16PtrToString(p.Description)
 		}
-		// Extract IP from first unicast address
 		if p.FirstUnicastAddress != nil {
 			sa := p.FirstUnicastAddress.Address.Sockaddr
 			if sa != nil {
@@ -554,7 +467,6 @@ func Interfaces() ([]InterfaceInfo, error) {
 				}
 			}
 		}
-		// Copy MAC address
 		if p.PhysicalAddressLength > 0 {
 			info.MAC = make([]byte, p.PhysicalAddressLength)
 			copy(info.MAC, p.PhysicalAddress[:p.PhysicalAddressLength])
@@ -566,32 +478,26 @@ func Interfaces() ([]InterfaceInfo, error) {
 }
 
 // ARP 返回 ARP 表条目。
-//   返回1 - ARP 表条目列表
-//   返回2 - 错误信息
 func ARP() ([]ARPEntry, error) {
 	var table unsafe.Pointer
-	r1, _, _ := syscall.SyscallN(procGetIpNetTable2.Addr(),
+	err := procGetIpNetTable2.Call(
 		uintptr(windows.AF_UNSPEC),
 		uintptr(unsafe.Pointer(&table)),
 		0,
 	)
-	if r1 != 0 {
-		return nil, fmt.Errorf("GetIpNetTable2 failed: %w", syscall.Errno(r1))
+	if err != nil {
+		return nil, fmt.Errorf("GetIpNetTable2: %w", err)
 	}
-	defer freeMibTable(table)
+	defer procFreeMibTable.Call(uintptr(table))
 
-	// MIB_IPNET_ROW2 layout from netioapi.h:
-	// Address(SOCKADDR_INET=28) + InterfaceIndex(4) + InterfaceLuid(8) +
-	// PhysicalAddress[IF_MAX_PHYS_ADDRESS_LENGTH=32] + PhysicalAddressLen(4) +
-	// State(4) + Flags(1+pad3=4) + ReachabilityTime(4) = 88 bytes
 	type mibIpNetRow2 struct {
 		Address            [28]byte
 		InterfaceIndex     uint32
 		InterfaceLUID      uint64
-		PhysicalAddress    [32]byte  // IF_MAX_PHYS_ADDRESS_LENGTH = 32
+		PhysicalAddress    [32]byte
 		PhysicalAddressLen uint32
 		State              uint32
-		_                  [8]byte   // trailing union fields
+		_                  [8]byte
 	}
 
 	numEntries := *(*uint32)(table)
@@ -627,35 +533,28 @@ func ARP() ([]ARPEntry, error) {
 }
 
 // Route 返回路由表条目。
-//   返回1 - 路由表条目列表
-//   返回2 - 错误信息
 func Route() ([]RouteEntry, error) {
 	var table unsafe.Pointer
-	r1, _, _ := syscall.SyscallN(procGetIpForwardTable2.Addr(),
+	err := procGetIpForwardTable2.Call(
 		uintptr(windows.AF_UNSPEC),
 		uintptr(unsafe.Pointer(&table)),
 	)
-	if r1 != 0 {
-		return nil, fmt.Errorf("GetIpForwardTable2 failed: %w", syscall.Errno(r1))
+	if err != nil {
+		return nil, fmt.Errorf("GetIpForwardTable2: %w", err)
 	}
-	defer freeMibTable(table)
+	defer procFreeMibTable.Call(uintptr(table))
 
-	// MIB_IPFORWARD_ROW2 layout from netioapi.h:
-	// InterfaceLuid(8) + InterfaceIndex(4) + DestinationPrefix(IP_ADDRESS_PREFIX=32) +
-	// NextHop(SOCKADDR_INET=28) + SitePrefixLength(1+pad3=4) +
-	// ValidLifetime(4) + PreferredLifetime(4) + Metric(4) +
-	// remaining fields(16) = 104 bytes
 	type mibIpForwardRow2 struct {
-		InterfaceLUID     uint64    // offset 0
-		InterfaceIndex    uint32    // offset 8
-		DestinationPrefix [32]byte  // offset 12: IP_ADDRESS_PREFIX = SOCKADDR_INET(28) + PrefixLength(1) + pad(3)
-		NextHop           [28]byte  // offset 44: SOCKADDR_INET
-		SitePrefixLength  uint8     // offset 72
-		_                 [3]byte   // offset 73: padding
-		ValidLifetime     uint32    // offset 76
-		PreferredLifetime uint32    // offset 80
-		Metric            uint32    // offset 84
-		_                 [16]byte  // offset 88: remaining fields (Protocol, Loopback, AutoconfigureAddress, Publish, Immortal, Age, Origin)
+		InterfaceLUID     uint64
+		InterfaceIndex    uint32
+		DestinationPrefix [32]byte
+		NextHop           [28]byte
+		SitePrefixLength  uint8
+		_                 [3]byte
+		ValidLifetime     uint32
+		PreferredLifetime uint32
+		Metric            uint32
+		_                 [16]byte
 	}
 
 	numEntries := *(*uint32)(table)
@@ -666,7 +565,6 @@ func Route() ([]RouteEntry, error) {
 	for i := uint32(0); i < numEntries; i++ {
 		r := *(*mibIpForwardRow2)(unsafe.Pointer(uintptr(firstRow) + rowSize*uintptr(i)))
 
-		// DestinationPrefix is IP_ADDRESS_PREFIX: SOCKADDR_INET(28) + PrefixLength(1) + pad(3)
 		destFamily := *(*uint16)(unsafe.Pointer(&r.DestinationPrefix[0]))
 		var destIP string
 		if destFamily == windows.AF_INET {
@@ -676,7 +574,6 @@ func Route() ([]RouteEntry, error) {
 		}
 		prefixLen := r.DestinationPrefix[28]
 
-		// NextHop is SOCKADDR_INET
 		nextHopFamily := *(*uint16)(unsafe.Pointer(&r.NextHop[0]))
 		var nextHopIP string
 		if nextHopFamily == windows.AF_INET {

@@ -10,7 +10,7 @@ import (
 func TestCache(t *testing.T) {
 	entries, err := Cache()
 	if err != nil {
-		if strings.Contains(err.Error(), "failed: 1") {
+		if strings.Contains(err.Error(), "Incorrect function") {
 			t.Skip("DnsGetCacheDataTable not supported on this Windows version")
 		}
 		t.Fatalf("Cache() failed: %v", err)

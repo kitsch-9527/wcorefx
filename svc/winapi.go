@@ -3,21 +3,20 @@
 package svc
 
 import (
-	"syscall"
 	"unsafe"
 
 	"golang.org/x/sys/windows"
+
+	"github.com/kitsch-9527/wcorefx/internal/winapi"
 )
 
-var modadvapi32 = windows.NewLazySystemDLL("Advapi32.dll")
-
 var (
-	procOpenSCManager        = modadvapi32.NewProc("OpenSCManagerW")
-	procCloseServiceHandle   = modadvapi32.NewProc("CloseServiceHandle")
-	procEnumServicesStatusEx = modadvapi32.NewProc("EnumServicesStatusExW")
-	procQueryServiceStatusEx = modadvapi32.NewProc("QueryServiceStatusEx")
-	procQueryServiceConfigW  = modadvapi32.NewProc("QueryServiceConfigW")
-	procOpenService          = modadvapi32.NewProc("OpenServiceW")
+	procOpenSCManager        = winapi.NewProc("Advapi32.dll", "OpenSCManagerW")
+	procCloseServiceHandle   = winapi.NewProc("Advapi32.dll", "CloseServiceHandle")
+	procEnumServicesStatusEx = winapi.NewProc("Advapi32.dll", "EnumServicesStatusExW")
+	procQueryServiceStatusEx = winapi.NewProc("Advapi32.dll", "QueryServiceStatusEx")
+	procQueryServiceConfigW  = winapi.NewProc("Advapi32.dll", "QueryServiceConfigW")
+	procOpenService          = winapi.NewProc("Advapi32.dll", "OpenServiceW")
 )
 
 // enumServiceStatusProcess 对应 Windows ENUM_SERVICE_STATUS_PROCESSW 结构体。
@@ -62,45 +61,34 @@ type queryServiceConfigW struct {
 }
 
 // openSCManager 打开服务控制管理器。
-//   machineName  - 目标机器名称（nil 表示本地机器）
-//   databaseName - 数据库名称（nil 表示默认数据库）
-//   desiredAccess - 访问权限
-//   返回 - 服务控制管理器句柄
-//   返回 - 错误信息
 func openSCManager(machineName, databaseName *uint16, desiredAccess uint32) (windows.Handle, error) {
-	r1, _, err := syscall.SyscallN(procOpenSCManager.Addr(),
+	h, err := procOpenSCManager.CallRet(
 		uintptr(unsafe.Pointer(machineName)),
 		uintptr(unsafe.Pointer(databaseName)),
 		uintptr(desiredAccess),
 	)
-	if r1 == 0 {
+	if h == 0 {
 		return 0, err
 	}
-	return windows.Handle(r1), nil
+	return windows.Handle(h), nil
 }
 
 // closeServiceHandle 关闭服务句柄。
 func closeServiceHandle(h windows.Handle) error {
-	r1, _, err := syscall.SyscallN(procCloseServiceHandle.Addr(),
-		uintptr(h),
-	)
-	if r1 == 0 {
-		return err
-	}
-	return nil
+	return procCloseServiceHandle.Call(uintptr(h))
 }
 
 // openService 打开指定服务。
 func openService(scm windows.Handle, serviceName *uint16, desiredAccess uint32) (windows.Handle, error) {
-	r1, _, err := syscall.SyscallN(procOpenService.Addr(),
+	h, err := procOpenService.CallRet(
 		uintptr(scm),
 		uintptr(unsafe.Pointer(serviceName)),
 		uintptr(desiredAccess),
 	)
-	if r1 == 0 {
+	if h == 0 {
 		return 0, err
 	}
-	return windows.Handle(r1), nil
+	return windows.Handle(h), nil
 }
 
 // enumServicesStatusEx 枚举服务状态。
@@ -113,7 +101,7 @@ func enumServicesStatusEx(scm windows.Handle, infoLevel, serviceType, serviceSta
 		groupNamePtr, _ = windows.UTF16PtrFromString(groupName)
 	}
 
-	r1, _, err := syscall.SyscallN(procEnumServicesStatusEx.Addr(),
+	return procEnumServicesStatusEx.Call(
 		uintptr(scm),
 		uintptr(infoLevel),
 		uintptr(serviceType),
@@ -125,24 +113,16 @@ func enumServicesStatusEx(scm windows.Handle, infoLevel, serviceType, serviceSta
 		uintptr(unsafe.Pointer(resumeHandle)),
 		uintptr(unsafe.Pointer(groupNamePtr)),
 	)
-	if r1 == 0 {
-		return err
-	}
-	return nil
 }
 
 // queryServiceStatusEx 查询服务状态。
 func queryServiceStatusEx(h windows.Handle, status *serviceStatusProcess) error {
 	var bytesNeeded uint32
-	r1, _, err := syscall.SyscallN(procQueryServiceStatusEx.Addr(),
+	return procQueryServiceStatusEx.Call(
 		uintptr(h),
 		uintptr(0), // SC_STATUS_PROCESS_INFO
 		uintptr(unsafe.Pointer(status)),
 		uintptr(unsafe.Sizeof(*status)),
 		uintptr(unsafe.Pointer(&bytesNeeded)),
 	)
-	if r1 == 0 {
-		return err
-	}
-	return nil
 }

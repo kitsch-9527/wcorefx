@@ -8,45 +8,39 @@ import (
 	"unsafe"
 
 	"golang.org/x/sys/windows"
+
+	"github.com/kitsch-9527/wcorefx/internal/winapi"
 )
 
-var moduser32 = windows.NewLazySystemDLL("user32.dll")
-
 var (
-	procEnumWindows     = moduser32.NewProc("EnumWindows")
-	procGetWindowTextW  = moduser32.NewProc("GetWindowTextW")
-	procGetClassNameW   = moduser32.NewProc("GetClassNameW")
-	procIsWindowVisible = moduser32.NewProc("IsWindowVisible")
+	procEnumWindows     = winapi.NewProc("user32.dll", "EnumWindows")
+	procGetWindowTextW  = winapi.NewProc("user32.dll", "GetWindowTextW")
+	procGetClassNameW   = winapi.NewProc("user32.dll", "GetClassNameW")
+	procIsWindowVisible = winapi.NewProc("user32.dll", "IsWindowVisible")
 )
 
 // WindowInfo 表示窗口信息
 type WindowInfo struct {
-	// HWND 窗口句柄
-	HWND uintptr
-	// Title 窗口标题
-	Title string
-	// ClassName 窗口类名
+	HWND      uintptr
+	Title     string
 	ClassName string
-	// Visible 是否可见
-	Visible bool
+	Visible   bool
 }
 
 // Windows 返回所有顶层窗口列表
-//   返回 - 窗口信息列表
-//   返回 - 错误信息
 func Windows() ([]WindowInfo, error) {
 	var wins []WindowInfo
 	cb := syscall.NewCallback(func(hwnd uintptr, lparam uintptr) uintptr {
 		var buf [512]uint16
 		var classBuf [256]uint16
 
-		procGetWindowTextW.Call(hwnd, uintptr(unsafe.Pointer(&buf[0])), uintptr(len(buf)))
+		procGetWindowTextW.CallRet(hwnd, uintptr(unsafe.Pointer(&buf[0])), uintptr(len(buf)))
 		title := windows.UTF16ToString(buf[:])
 
-		procGetClassNameW.Call(hwnd, uintptr(unsafe.Pointer(&classBuf[0])), uintptr(len(classBuf)))
+		procGetClassNameW.CallRet(hwnd, uintptr(unsafe.Pointer(&classBuf[0])), uintptr(len(classBuf)))
 		className := windows.UTF16ToString(classBuf[:])
 
-		visible, _, _ := procIsWindowVisible.Call(hwnd)
+		visible, _ := procIsWindowVisible.CallRet(hwnd)
 
 		wins = append(wins, WindowInfo{
 			HWND:      hwnd,
@@ -57,7 +51,7 @@ func Windows() ([]WindowInfo, error) {
 		return 1
 	})
 
-	r1, _, _ := syscall.SyscallN(procEnumWindows.Addr(), cb, 0)
+	r1, _ := procEnumWindows.CallRet(cb, 0)
 	if r1 == 0 {
 		return nil, fmt.Errorf("EnumWindows failed")
 	}

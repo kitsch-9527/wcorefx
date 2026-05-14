@@ -5,14 +5,12 @@ package svc
 
 import (
 	"fmt"
-	"syscall"
 	"unsafe"
 
 	"golang.org/x/sys/windows"
 )
 
 const (
-	// Service status constants
 	serviceStopped         = 1
 	serviceStartPending    = 2
 	serviceStopPending     = 3
@@ -21,17 +19,15 @@ const (
 	servicePausePending    = 6
 	servicePaused          = 7
 
-	// Service type constants
 	serviceTypeWin32 = 0x00000030
 
-	// Start type constants
 	startBoot     = 0
 	startSystem   = 1
 	startAuto     = 2
 	startManual   = 3
 	startDisabled = 4
 
-	serviceStateAll   = 3
+	serviceStateAll    = 3
 	scEnumProcessInfo  = 0
 	scManagerAllAccess = 0xF003F
 
@@ -41,18 +37,12 @@ const (
 
 // ServiceInfo 表示 Windows 服务信息。
 type ServiceInfo struct {
-	// Name 服务名称
-	Name string
-	// DisplayName 服务显示名称
+	Name        string
 	DisplayName string
-	// Status 服务状态字符串
-	Status string
-	// PID 服务进程 ID（0 表示非进程服务）
-	PID uint32
-	// StartType 启动类型字符串
-	StartType string
-	// Account 运行账户名
-	Account string
+	Status      string
+	PID         uint32
+	StartType   string
+	Account     string
 }
 
 // statusString 将服务状态常量转换为可读字符串。
@@ -105,8 +95,6 @@ func openSCM() (windows.Handle, error) {
 }
 
 // List 返回所有正在运行的服务列表。
-//   返回 - 服务信息列表
-//   返回 - 错误信息
 func List() ([]ServiceInfo, error) {
 	scm, err := openSCM()
 	if err != nil {
@@ -140,7 +128,6 @@ func List() ([]ServiceInfo, error) {
 			PID:         e.ProcessID,
 		}
 
-		// Query config for more details
 		h, err := openService(scm, e.ServiceName, serviceQueryConfig)
 		if err == nil {
 			config, cerr := queryConfig(h)
@@ -160,9 +147,6 @@ func List() ([]ServiceInfo, error) {
 }
 
 // Status 返回指定服务的当前状态。
-//   name - 服务名称
-//   返回 - 服务状态信息
-//   返回 - 错误信息
 func Status(name string) (ServiceInfo, error) {
 	scm, err := openSCM()
 	if err != nil {
@@ -192,9 +176,6 @@ func Status(name string) (ServiceInfo, error) {
 }
 
 // Config 返回指定服务的配置信息。
-//   name - 服务名称
-//   返回 - 服务配置信息
-//   返回 - 错误信息
 func Config(name string) (ServiceInfo, error) {
 	scm, err := openSCM()
 	if err != nil {
@@ -224,25 +205,23 @@ func Config(name string) (ServiceInfo, error) {
 	return si, nil
 }
 
-// queryConfig 查询服务配置信息。
 func queryConfig(h windows.Handle) (*queryServiceConfigW, error) {
 	var bytesNeeded uint32
-	// First call: returns ERROR_INSUFFICIENT_BUFFER, populates bytesNeeded
-	syscall.SyscallN(procQueryServiceConfigW.Addr(),
+	procQueryServiceConfigW.Call(
 		uintptr(h),
-		uintptr(0), // NULL buffer
-		uintptr(0), // 0 size
+		0,
+		0,
 		uintptr(unsafe.Pointer(&bytesNeeded)),
 	)
 
 	buf := make([]byte, bytesNeeded)
-	r1, _, err := syscall.SyscallN(procQueryServiceConfigW.Addr(),
+	err := procQueryServiceConfigW.Call(
 		uintptr(h),
 		uintptr(unsafe.Pointer(&buf[0])),
 		uintptr(bytesNeeded),
 		uintptr(unsafe.Pointer(&bytesNeeded)),
 	)
-	if r1 == 0 {
+	if err != nil {
 		return nil, fmt.Errorf("QueryServiceConfigW failed: %w", err)
 	}
 	return (*queryServiceConfigW)(unsafe.Pointer(&buf[0])), nil

@@ -6,7 +6,6 @@ package dns
 import (
 	"fmt"
 	"net"
-	"syscall"
 	"unsafe"
 
 	"golang.org/x/sys/windows"
@@ -14,27 +13,18 @@ import (
 
 // DNSEntry 表示 DNS 缓存条目。
 type DNSEntry struct {
-	// Name 域名
 	Name string
-	// Data DNS 记录数据（如 IP 地址）
 	Data string
-	// Type DNS 记录类型（1=A, 28=AAAA, 5=CNAME 等）
 	Type uint16
-	// TTL 缓存 TTL（秒）
-	TTL uint32
+	TTL  uint32
 }
 
 // Cache 返回当前 DNS 缓存内容。
-//
-//	 返回1 - DNS 缓存条目列表
-//	 返回2 - 错误信息
 func Cache() ([]DNSEntry, error) {
 	var table unsafe.Pointer
-	r1, _, _ := syscall.SyscallN(procDnsGetCacheDataTable.Addr(),
-		uintptr(unsafe.Pointer(&table)),
-	)
-	if r1 != 0 {
-		return nil, fmt.Errorf("DnsGetCacheDataTable failed: %d", r1)
+	_, err := procDnsGetCacheDataTable.CallRet(uintptr(unsafe.Pointer(&table)))
+	if err != nil {
+		return nil, fmt.Errorf("DnsGetCacheDataTable failed: %w", err)
 	}
 	if table == nil {
 		return nil, nil
@@ -53,10 +43,10 @@ func Cache() ([]DNSEntry, error) {
 			dataPtr := unsafe.Pointer(uintptr(unsafe.Pointer(rec)) + unsafe.Sizeof(dnsRecord{}))
 
 			switch {
-			case rec.DataType == 1 && rec.DataLength >= 4: // A 记录
+			case rec.DataType == 1 && rec.DataLength >= 4:
 				ipData := (*[4]byte)(dataPtr)
 				data = fmt.Sprintf("%d.%d.%d.%d", ipData[0], ipData[1], ipData[2], ipData[3])
-			case rec.DataType == 28 && rec.DataLength >= 16: // AAAA 记录
+			case rec.DataType == 28 && rec.DataLength >= 16:
 				ipData := (*[16]byte)(dataPtr)
 				data = net.IP(ipData[:]).String()
 			}

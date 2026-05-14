@@ -2,62 +2,13 @@
 
 package netapi
 
-import (
-	"syscall"
-	"unsafe"
-
-	"golang.org/x/sys/windows"
-)
-
-var modiphlpapi = windows.NewLazySystemDLL("iphlpapi.dll")
+import "github.com/kitsch-9527/wcorefx/internal/winapi"
 
 var (
-	procGetExtendedTcpTable   = modiphlpapi.NewProc("GetExtendedTcpTable")
-	procGetExtendedUdpTable   = modiphlpapi.NewProc("GetExtendedUdpTable")
-	procGetAdaptersAddresses  = modiphlpapi.NewProc("GetAdaptersAddresses")
-	procGetIpNetTable2        = modiphlpapi.NewProc("GetIpNetTable2")
-	procGetIpForwardTable2    = modiphlpapi.NewProc("GetIpForwardTable2")
-	procFreeMibTable          = modiphlpapi.NewProc("FreeMibTable")
+	procGetExtendedTcpTable  = winapi.NewProc("iphlpapi.dll", "GetExtendedTcpTable", winapi.ConvErrnoReturn)
+	procGetExtendedUdpTable  = winapi.NewProc("iphlpapi.dll", "GetExtendedUdpTable", winapi.ConvErrnoReturn)
+	procGetAdaptersAddresses = winapi.NewProc("iphlpapi.dll", "GetAdaptersAddresses", winapi.ConvErrnoReturn)
+	procGetIpNetTable2       = winapi.NewProc("iphlpapi.dll", "GetIpNetTable2", winapi.ConvErrnoReturn)
+	procGetIpForwardTable2   = winapi.NewProc("iphlpapi.dll", "GetIpForwardTable2", winapi.ConvErrnoReturn)
+	procFreeMibTable         = winapi.NewProc("iphlpapi.dll", "FreeMibTable", winapi.ConvErrnoReturn)
 )
-
-func getExtendedTcpTable(table *byte, size *uint32, sort bool, af, tableClass, reserved uint32) error {
-	in := uint32(0)
-	if sort {
-		in = 1
-	}
-	r1, _, _ := syscall.SyscallN(procGetExtendedTcpTable.Addr(),
-		uintptr(unsafe.Pointer(table)),
-		uintptr(unsafe.Pointer(size)),
-		uintptr(in),
-		uintptr(af),
-		uintptr(tableClass),
-		uintptr(reserved),
-	)
-	if r1 != 0 {
-		return syscall.Errno(r1)
-	}
-	return nil
-}
-
-func getExtendedUdpTable(table *byte, size *uint32, sort bool, af, tableClass, reserved uint32) error {
-	in := uint32(0)
-	if sort {
-		in = 1
-	}
-	r1, _, _ := syscall.SyscallN(procGetExtendedUdpTable.Addr(),
-		uintptr(unsafe.Pointer(table)),
-		uintptr(unsafe.Pointer(size)),
-		uintptr(in),
-		uintptr(af),
-		uintptr(tableClass),
-		uintptr(reserved),
-	)
-	if r1 != 0 {
-		return syscall.Errno(r1)
-	}
-	return nil
-}
-
-func freeMibTable(table unsafe.Pointer) {
-	syscall.SyscallN(procFreeMibTable.Addr(), uintptr(table))
-}

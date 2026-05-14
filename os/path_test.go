@@ -1,6 +1,6 @@
 //go:build windows
 
-package obj
+package os
 
 import (
 	"testing"

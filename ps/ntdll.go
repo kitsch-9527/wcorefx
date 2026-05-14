@@ -7,9 +7,15 @@ import (
 	"unsafe"
 
 	"golang.org/x/sys/windows"
+
+	"github.com/kitsch-9527/wcorefx/internal/winapi"
 )
 
-// OBJECT_INFORMATION_CLASS for NtQueryObject
+const (
+	errStatusBufferTooSmall       = syscall.Errno(0xC0000023)
+	errStatusInfoLengthMismatch   = syscall.Errno(0xC0000004)
+)
+
 type objectInformationClass int32
 
 const (
@@ -24,7 +30,7 @@ type publicObjectTypeInformation struct {
 		MaxLength uint16
 		Buffer    *uint16
 	}
-	_ [22]byte // remaining fields not needed
+	_ [22]byte
 }
 
 type unicodeString struct {
@@ -34,10 +40,8 @@ type unicodeString struct {
 }
 
 var (
-	modntdll = windows.NewLazySystemDLL("ntdll.dll")
-
-	procNtQueryObject      = modntdll.NewProc("NtQueryObject")
-	procNtDuplicateObject  = modntdll.NewProc("NtDuplicateObject")
+	procNtQueryObject     = winapi.NewProc("ntdll.dll", "NtQueryObject", winapi.ConvNTSTATUS)
+	procNtDuplicateObject = winapi.NewProc("ntdll.dll", "NtDuplicateObject", winapi.ConvNTSTATUS)
 )
 
 func ntQueryObject(handle windows.Handle, infoClass objectInformationClass, buf []byte) ([]byte, error) {
@@ -47,42 +51,45 @@ func ntQueryObject(handle windows.Handle, infoClass objectInformationClass, buf 
 		bufSize = 256
 		buf = make([]byte, bufSize)
 	}
-	status, _, _ := procNtQueryObject.Call(
+	_, err := procNtQueryObject.CallRet(
 		uintptr(handle),
 		uintptr(infoClass),
 		uintptr(unsafe.Pointer(&buf[0])),
 		uintptr(bufSize),
 		uintptr(unsafe.Pointer(&returnLength)),
 	)
-	if status == 0xC0000004 || status == 0xC0000023 { // STATUS_INFO_LENGTH_MISMATCH / STATUS_BUFFER_TOO_SMALL
+	if err != nil && err != errStatusBufferTooSmall && err != errStatusInfoLengthMismatch {
+		return nil, err
+	}
+	if err != nil {
 		buf = make([]byte, returnLength)
-		status, _, _ = procNtQueryObject.Call(
+		_, err = procNtQueryObject.CallRet(
 			uintptr(handle),
 			uintptr(infoClass),
 			uintptr(unsafe.Pointer(&buf[0])),
 			uintptr(returnLength),
 			uintptr(unsafe.Pointer(&returnLength)),
 		)
-	}
-	if status != 0 {
-		return nil, syscall.Errno(status)
+		if err != nil {
+			return nil, err
+		}
 	}
 	return buf, nil
 }
 
 func ntDuplicateObject(srcProc windows.Handle, srcHandle windows.Handle, dstProc windows.Handle, options uint32) (windows.Handle, error) {
 	var targetHandle windows.Handle
-	status, _, _ := procNtDuplicateObject.Call(
+	_, err := procNtDuplicateObject.CallRet(
 		uintptr(srcProc),
 		uintptr(srcHandle),
 		uintptr(dstProc),
 		uintptr(unsafe.Pointer(&targetHandle)),
-		0, // PROCESS_DUP_HANDLE
+		0,
 		0,
 		uintptr(options),
 	)
-	if status != 0 {
-		return 0, syscall.Errno(status)
+	if err != nil {
+		return 0, err
 	}
 	return targetHandle, nil
 }

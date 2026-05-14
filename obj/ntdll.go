@@ -3,26 +3,21 @@
 package obj
 
 import (
-	"syscall"
 	"unsafe"
 
-	"golang.org/x/sys/windows"
+	"github.com/kitsch-9527/wcorefx/internal/winapi"
 )
 
-var modntdll = windows.NewLazySystemDLL("ntdll.dll")
-
 var (
-	procNtQuerySystemInformation = modntdll.NewProc("NtQuerySystemInformation")
-	procNtQueryDirectoryObject   = modntdll.NewProc("NtQueryDirectoryObject")
+	procNtQuerySystemInformation = winapi.NewProc("ntdll.dll", "NtQuerySystemInformation", winapi.ConvNTSTATUS)
+	procNtQueryDirectoryObject   = winapi.NewProc("ntdll.dll", "NtQueryDirectoryObject", winapi.ConvNTSTATUS)
+	procNtOpenDirectoryObject   = winapi.NewProc("ntdll.dll", "NtOpenDirectoryObject", winapi.ConvNTSTATUS)
 )
 
 const (
 	systemModuleInformation = 11
 )
 
-// systemModuleInfoEntry represents a single kernel module entry returned
-// by NtQuerySystemInformation with SystemModuleInformation class.
-// The FullPathName field contains the full path as UTF-16LE characters.
 type systemModuleInfoEntry struct {
 	Reserved1       [2]uint64
 	ImageBase      uint64
@@ -41,59 +36,48 @@ type systemModuleInfo struct {
 	Modules      [1]systemModuleInfoEntry
 }
 
-// unicodeString matches the native NT UNICODE_STRING structure.
 type unicodeString struct {
 	Length        uint16
 	MaximumLength uint16
 	Buffer        *uint16
 }
 
-// objectAttributes matches the native NT OBJECT_ATTRIBUTES structure.
 type objectAttributes struct {
 	Length                   uint32
-	RootDirectory            windows.Handle
+	RootDirectory            uintptr
 	ObjectName               *unicodeString
 	Attributes               uint32
 	SecurityDescriptor       unsafe.Pointer
 	SecurityQualityOfService unsafe.Pointer
 }
 
-// objectDirectoryInformation represents a single OBJECT_DIRECTORY_INFORMATION
-// returned by NtQueryDirectoryObject. Name and TypeName are inline
-// UNICODE_STRING structs whose Buffer pointers reference string data
-// within the same output buffer.
 type objectDirectoryInformation struct {
 	Name     unicodeString
 	TypeName unicodeString
 }
 
 func ntQuerySystemInformation(infoClass uint32, buf unsafe.Pointer, bufSize uint32, returnLen *uint32) error {
-	r1, _, _ := syscall.SyscallN(procNtQuerySystemInformation.Addr(),
+	return procNtQuerySystemInformation.Call(
 		uintptr(infoClass),
 		uintptr(buf),
 		uintptr(bufSize),
 		uintptr(unsafe.Pointer(returnLen)),
 	)
-	if r1 != 0 {
-		return syscall.Errno(r1)
-	}
-	return nil
 }
 
-func ntQueryDirectoryObject(handle windows.Handle, buf unsafe.Pointer, bufSize uint32, returnLen *uint32, context *uint32, returnSingleEntry, restartScan uint32) error {
-	r1, _, _ := syscall.SyscallN(procNtQueryDirectoryObject.Addr(),
-		uintptr(handle),
+func ntQueryDirectoryObject(handle uintptr, buf unsafe.Pointer, bufSize uint32, retLength *uint32, context *uint32, returnSingleEntry, restartScan uint32) error {
+	r1, err := procNtQueryDirectoryObject.CallRet(
+		handle,
 		uintptr(buf),
 		uintptr(bufSize),
 		uintptr(returnSingleEntry),
 		uintptr(restartScan),
 		uintptr(unsafe.Pointer(context)),
-		uintptr(unsafe.Pointer(returnLen)),
+		uintptr(unsafe.Pointer(retLength)),
 	)
-	// STATUS_MORE_ENTRIES (0x105) means the buffer was filled and more
-	// entries exist -- it is not an error condition.
-	if r1 != 0 && r1 != 0x105 {
-		return syscall.Errno(r1)
+	// STATUS_MORE_ENTRIES (0x105) means buffer filled and more exist — not an error.
+	if err != nil && r1 != 0x105 {
+		return err
 	}
 	return nil
 }
