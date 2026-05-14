@@ -4,6 +4,8 @@ package event
 
 import (
 	"testing"
+
+	"github.com/kitsch-9527/wcorefx/internal/winapi"
 )
 
 func TestSIDString(t *testing.T) {
@@ -67,9 +69,9 @@ func TestEventString(t *testing.T) {
 }
 
 func TestInsufficientBufferError(t *testing.T) {
-	err := InsufficientBufferError{Cause: nil, RequiredSize: 1024}
+	err := &winapi.ErrInsufficientBuffer{Size: 1024}
 	if err.Error() == "" {
-		t.Error("InsufficientBufferError.Error() returned empty")
+		t.Error("ErrInsufficientBuffer.Error() returned empty")
 	}
 }
 

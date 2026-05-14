@@ -168,23 +168,6 @@ type KeyValue struct {
 	Value string
 }
 
-// InsufficientBufferError 表示缓冲区大小不足的错误。
-type InsufficientBufferError struct {
-	// Cause 导致缓冲不足的原始错误。
-	Cause        error
-	// RequiredSize 需要的缓冲区大小。
-	RequiredSize int
-}
-
-// Error 返回缓冲不足错误的描述信息。
-//   返回 - 错误的文本描述
-func (e InsufficientBufferError) Error() string {
-	if e.Cause != nil {
-		return e.Cause.Error()
-	}
-	return fmt.Sprintf("insufficient buffer: need %d bytes", e.RequiredSize)
-}
-
 // Version 表示事件版本号，支持自定义XML反序列化。
 type Version uint8
 

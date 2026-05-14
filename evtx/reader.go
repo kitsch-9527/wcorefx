@@ -3,6 +3,7 @@
 package evtx
 
 import (
+	"errors"
 	"fmt"
 	"log"
 	"os"
@@ -12,6 +13,8 @@ import (
 	"golang.org/x/sys/windows"
 
 	"github.com/kitsch-9527/wcorefx/event"
+
+	"github.com/kitsch-9527/wcorefx/internal/winapi"
 )
 
 const (
@@ -120,8 +123,9 @@ func (r *Reader) Read() ([]event.Record, error) {
 	for _, h := range handles {
 		r.outputBuf.Reset()
 		err := RenderEventXML(h, r.renderBuf, r.outputBuf)
-		if bufErr, ok := err.(InsufficientBufferError); ok {
-			r.renderBuf = make([]byte, bufErr.RequiredSize)
+		var ib *winapi.ErrInsufficientBuffer
+		if errors.As(err, &ib) {
+			r.renderBuf = make([]byte, ib.Size)
 			err = RenderEventXML(h, r.renderBuf, r.outputBuf)
 		}
 		if err != nil {
@@ -358,3 +362,4 @@ func EvtOpenLog(session EvtHandle, path string, flags EvtOpenLogFlag) (EvtHandle
 
 // Ensure unused import suppression.
 var _ = unsafe.Pointer(nil)
+

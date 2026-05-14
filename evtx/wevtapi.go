@@ -617,7 +617,7 @@ func RenderEventXML(eventHandle EvtHandle, renderBuf []byte, out *ByteBuffer) er
 	err := evtRender(0, eventHandle, EvtRenderEventXml,
 		uint32(len(renderBuf)), &renderBuf[0], &bufferUsed, &propertyCount)
 	if err == ERROR_INSUFFICIENT_BUFFER {
-		return InsufficientBufferError{RequiredSize: int(bufferUsed)}
+		return &winapi.ErrInsufficientBuffer{Size: int(bufferUsed)}
 	}
 	if err != nil {
 		return err
@@ -629,15 +629,6 @@ func RenderEventXML(eventHandle EvtHandle, renderBuf []byte, out *ByteBuffer) er
 		_, err = out.Write(renderBuf[:bufferUsed])
 	}
 	return err
-}
-
-// InsufficientBufferError 表示缓冲区大小不足的错误。
-type InsufficientBufferError struct {
-	RequiredSize int
-}
-
-func (e InsufficientBufferError) Error() string {
-	return fmt.Sprintf("insufficient buffer, need %d bytes", e.RequiredSize)
 }
 
 // CreateBookmarkFromXML 从XML创建书签。
